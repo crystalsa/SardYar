@@ -1,0 +1,83 @@
+name: Build & Release SardYar APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Signed Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          KEYSTORE_PASSWORD: "sardyar1403"
+          KEY_ALIAS: "sardyar"
+          KEY_PASSWORD: "sardyar1403"
+
+      - name: Prepare APK for Release
+        run: |
+          VERSION_TAG="v1.0.${{ github.run_number }}"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION_TAG="${{ github.ref_name }}"
+          fi
+          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
+          
+          mkdir -p release_artifacts
+          cp app/build/outputs/apk/release/app-release.apk release_artifacts/SardYar-${VERSION_TAG}.apk
+          echo "Release APK created: SardYar-${VERSION_TAG}.apk"
+
+      - name: Upload APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sardyar-release-apk
+          path: release_artifacts/*.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          name: "سردیار - نسخه ${{ env.VERSION_TAG }}"
+          body: |
+            ## ❄️ سردیار (SardYar) - سامانه جامع مدیریت سردخانه
+            
+            نسخه جدید برنامه سردیار به صورت خودکار کامپایل و منتشر شد.
+            
+            ### 📦 مشخصات این نسخه:
+            - **نام فایل:** `SardYar-${{ env.VERSION_TAG }}.apk`
+            - **نسخه:** `${{ env.VERSION_TAG }}`
+            - **امضای دیجیتال:** کلید رسمی سردیار (پشتیبانی از بروزرسانی بدون حذف نسخه قبلی)
+            - **تاریخ انتشار:** ${{ github.event.head_commit.timestamp || 'اکنون' }}
+            
+            ### 📱 نحوه نصب:
+            فایل APK پیوست شده در بخش Assets زیر را دانلود کرده و روی گوشی اندرویدی خود نصب نمایید.
+          files: release_artifacts/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
