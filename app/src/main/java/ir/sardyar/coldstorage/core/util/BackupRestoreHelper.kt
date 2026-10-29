@@ -19,9 +19,9 @@ import java.io.InputStreamReader
 object BackupRestoreHelper {
 
     /**
-     * پشتیبان‌گیری از کل دیتابیس به صورت یک فایل استاندارد JSON
+     * تولید متن استاندارد JSON از کل دیتابیس
      */
-    fun exportBackupJson(context: Context, records: List<ColdStorageEntry>): File {
+    fun generateBackupJsonString(records: List<ColdStorageEntry>): String {
         val root = JSONObject()
         root.put("app", "SardYar")
         root.put("version", "1.0")
@@ -67,6 +67,8 @@ object BackupRestoreHelper {
                 wObj.put("role", w.role.name)
                 wObj.put("agreedWage", w.agreedWage)
                 wObj.put("paidAmount", w.paidAmount)
+                wObj.put("isSettled", w.isSettled)
+                wObj.put("settlementDate", w.settlementDate ?: "")
                 workersArray.put(wObj)
             }
             obj.put("workers", workersArray)
@@ -74,10 +76,45 @@ object BackupRestoreHelper {
         }
 
         root.put("records", recordsArray)
+        return root.toString(2)
+    }
 
+    /**
+     * نام پیش‌فرض فایل پشتیبان بر اساس تاریخ امروز شمسی
+     */
+    fun getDefaultBackupFileName(): String {
+        val today = JalaliDateHelper.getTodayJalali()
+        val m = today.month.toString().padStart(2, '0')
+        val d = today.day.toString().padStart(2, '0')
+        return "sardyar_backup_${today.year}_${m}_${d}.json"
+    }
+
+    /**
+     * نوشتن مستقیم پشتیبان در Uri انتخاب‌شده توسط کاربر (Storage Access Framework)
+     */
+    fun writeBackupToUri(context: Context, uri: Uri, records: List<ColdStorageEntry>): Boolean {
+        return try {
+            val jsonString = generateBackupJsonString(records)
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(jsonString.toByteArray(Charsets.UTF_8))
+                stream.flush()
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * پشتیبان‌گیری از کل دیتابیس به صورت یک فایل موقت استاندارد JSON (جهت اشتراک‌گذاری)
+     */
+    fun exportBackupJson(context: Context, records: List<ColdStorageEntry>): File {
+        val jsonString = generateBackupJsonString(records)
+        val today = JalaliDateHelper.getTodayJalali()
         val fileName = "sardyar_backup_${today.year}_${today.month}_${today.day}_${System.currentTimeMillis().toString().takeLast(4)}.json"
         val file = File(context.cacheDir, fileName)
-        file.writeText(root.toString(2), Charsets.UTF_8)
+        file.writeText(jsonString, Charsets.UTF_8)
         return file
     }
 
@@ -108,7 +145,9 @@ object BackupRestoreHelper {
                                     WorkerRole.UNLOADER
                                 },
                                 agreedWage = wObj.optDouble("agreedWage", 0.0),
-                                paidAmount = wObj.optDouble("paidAmount", 0.0)
+                                paidAmount = wObj.optDouble("paidAmount", 0.0),
+                                isSettled = wObj.optBoolean("isSettled", false),
+                                settlementDate = if (wObj.has("settlementDate") && wObj.getString("settlementDate").isNotBlank()) wObj.getString("settlementDate") else null
                             )
                         )
                     }

@@ -109,6 +109,19 @@ fun ReportsScreen(
 ) {
     val context = LocalContext.current
 
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val success = BackupRestoreHelper.writeBackupToUri(context, uri, state.records)
+            if (success) {
+                Toast.makeText(context, "فایل پشتیبان با موفقیت در مسیر انتخاب‌شده ذخیره شد.", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "خطا در ذخیره فایل پشتیبان در مسیر انتخاب‌شده.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val pickJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -442,9 +455,7 @@ fun ReportsScreen(
                                     Toast.makeText(context, "دیتابیس خالی است و رکوردی برای پشتیبان‌گیری وجود ندارد.", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
-                                val backupFile = BackupRestoreHelper.exportBackupJson(context, state.records)
-                                Toast.makeText(context, "فایل پشتیبان JSON با موفقیت ایجاد شد.", Toast.LENGTH_SHORT).show()
-                                ReportExportHelper.shareFile(context, backupFile, "application/json", "پشتیبان دیتابیس سردیار")
+                                createBackupLauncher.launch(BackupRestoreHelper.getDefaultBackupFileName())
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
                             shape = RoundedCornerShape(12.dp),

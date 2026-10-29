@@ -1005,7 +1005,7 @@ private fun ExpandableCargoCodeCard(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item.appleBreakdown.forEach { variety ->
                             val isYellow = variety.appleName.contains("زرد")
                             val isRed = variety.appleName.contains("قرمز")
@@ -1030,72 +1030,132 @@ private fun ExpandableCargoCodeCard(
                                 else -> Color(0xFF15803D)
                             }
 
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(chipBg)
-                                    .border(1.dp, chipBorder, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .border(1.dp, chipBorder, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 11.dp, vertical = 9.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(chipAccent)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "${variety.appleName} (${variety.boxTypeTitle})",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = chipAccent,
-                                        fontFamily = VazirmatnFamily
-                                    )
-                                }
+                                // ردیف اول: نام نوع سیب و برچسب مدل سبد در سمت راست، و کادر مانده در سمت چپ
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(chipAccent)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = variety.appleName,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = chipAccent,
+                                            fontFamily = VazirmatnFamily
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(chipAccent.copy(alpha = 0.12f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = variety.boxTypeTitle,
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = chipAccent,
+                                                fontFamily = VazirmatnFamily
+                                            )
+                                        }
+                                    }
 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // ورود به رنگ سبز
-                                    Text(
-                                        text = "ورود: ${JalaliDateHelper.toPersianDigits(variety.inBoxes.toString())}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF16A34A),
-                                        fontFamily = VazirmatnFamily
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "|",
-                                        fontSize = 10.sp,
-                                        color = BorderColor,
-                                        fontFamily = VazirmatnFamily
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    // خروج به رنگ قرمز پررنگ
-                                    Text(
-                                        text = "خروج: ${JalaliDateHelper.toPersianDigits(variety.outBoxes.toString())}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFFDC2626),
-                                        fontFamily = VazirmatnFamily
-                                    )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    // مانده با رنگ متن سیاه
+
+                                    // مانده با رنگ متن سیاه در کادر سفید مجزا و بدون شکستگی
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(7.dp))
                                             .background(Color.White)
-                                            .border(1.dp, Color(0xFF94A3B8), RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(7.dp))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
                                             text = "مانده: ${NumberFormatHelper.formatBoxes(variety.remainingBoxes, true)}",
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color.Black,
+                                            fontFamily = VazirmatnFamily,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(7.dp))
+
+                                // ردیف دوم: آمار ورودی (سبز) و خروجی (قرمز پررنگ) با تفکیک متقارن و بدون تداخل
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.65f))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.ArrowDownward,
+                                            contentDescription = null,
+                                            tint = Color(0xFF16A34A),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "ورود:",
+                                            fontSize = 11.sp,
+                                            color = TextSecondary,
+                                            fontFamily = VazirmatnFamily
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "${NumberFormatHelper.formatBoxes(variety.inBoxes, true)}",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF16A34A),
+                                            fontFamily = VazirmatnFamily
+                                        )
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.ArrowUpward,
+                                            contentDescription = null,
+                                            tint = Color(0xFFDC2626),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "خروج:",
+                                            fontSize = 11.sp,
+                                            color = TextSecondary,
+                                            fontFamily = VazirmatnFamily
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "${NumberFormatHelper.formatBoxes(variety.outBoxes, true)}",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFFDC2626),
                                             fontFamily = VazirmatnFamily
                                         )
                                     }
