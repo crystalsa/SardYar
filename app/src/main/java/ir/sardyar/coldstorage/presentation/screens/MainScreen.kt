@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -125,27 +126,29 @@ fun MainScreen(viewModel: InventoryViewModel) {
         label = "NewRecordScreenTransition"
     ) { isOpen ->
         if (isOpen) {
-            NewRecordScreen(
-                initialType = newRecordInitialType,
-                editingRecord = editingRecord,
-                facilities = state.facilities,
-                defaultFacilityId = state.activeFacilityId,
-                lotBalances = state.lotBalances,
-                allRecords = state.records,
-                onSave = { record ->
-                    if (editingRecord != null) {
-                        viewModel.updateRecord(record)
-                    } else {
-                        viewModel.addRecord(record)
+            key(editingRecord?.id ?: "NEW_ENTRY") {
+                NewRecordScreen(
+                    initialType = newRecordInitialType,
+                    editingRecord = editingRecord,
+                    facilities = state.facilities,
+                    defaultFacilityId = state.activeFacilityId,
+                    lotBalances = state.lotBalances,
+                    allRecords = state.records,
+                    onSave = { record ->
+                        if (editingRecord != null) {
+                            viewModel.updateRecord(record)
+                        } else {
+                            viewModel.addRecord(record)
+                        }
+                        editingRecord = null
+                        isNewRecordOpen = false
+                    },
+                    onBack = {
+                        editingRecord = null
+                        isNewRecordOpen = false
                     }
-                    editingRecord = null
-                    isNewRecordOpen = false
-                },
-                onBack = {
-                    editingRecord = null
-                    isNewRecordOpen = false
-                }
-            )
+                )
+            }
         } else {
             Scaffold(
                 bottomBar = {

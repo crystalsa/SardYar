@@ -50,6 +50,9 @@ data class InventoryUiState(
     val currentStockBoxes: Int
         get() = (totalEntryBoxes - totalExitBoxes).coerceAtLeast(0)
 
+    val hasUnweighedRecords: Boolean
+        get() = records.any { !it.hasWeightRecorded }
+
     val goldenPremiumStockKg: Double
         get() = getCategoryStock(AppleCategory.GOLDEN_PREMIUM)
 

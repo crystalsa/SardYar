@@ -82,6 +82,10 @@ data class ColdStorageEntry(
 
     val isWorkersFullySettled: Boolean
         get() = workers.isEmpty() || workers.all { it.isSettled }
+
+    // آیا باسکول (وزن ناخالص) برای این بار ثبت شده است؟
+    val hasWeightRecorded: Boolean
+        get() = grossWeightKg > 0.0
 }
 
 /**

@@ -1182,7 +1182,7 @@ private fun ExpandableDailyRecordCard(
                         )
                         if (record.netWeightKg > 0) {
                             Text(
-                                text = "${NumberFormatHelper.formatTonnage(record.netWeightKg / 1000.0, true)} تن",
+                                text = NumberFormatHelper.formatWeightTon(record.netWeightKg, true),
                                 fontSize = 10.sp,
                                 color = TextMuted,
                                 fontFamily = VazirmatnFamily

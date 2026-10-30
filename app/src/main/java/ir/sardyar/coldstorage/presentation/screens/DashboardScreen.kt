@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.sardyar.coldstorage.core.theme.AppleGreen
 import ir.sardyar.coldstorage.core.theme.AppleGreenLight
+import ir.sardyar.coldstorage.core.theme.AppleYellow
+import ir.sardyar.coldstorage.core.theme.AppleYellowLight
 import ir.sardyar.coldstorage.core.theme.BorderColor
 import ir.sardyar.coldstorage.core.theme.ColdIce
 import ir.sardyar.coldstorage.core.theme.ColdIceLight
@@ -109,12 +111,15 @@ data class CargoCodeDetailedItem(
     val totalInBoxes: Int,
     val totalOutBoxes: Int,
     val remainingBoxes: Int,
+    val totalInWeightKg: Double,
+    val totalOutWeightKg: Double,
     val remainingNetWeightKg: Double,
     val totalHandlingFees: Double,
     val totalWorkersPaid: Double,
     val totalWorkersRemaining: Double,
     val appleBreakdown: List<AppleVarietyStockInfo>,
-    val entries: List<ColdStorageEntry>
+    val entries: List<ColdStorageEntry>,
+    val hasUnweighedEntries: Boolean = entries.any { !it.hasWeightRecorded }
 )
 
 /**
@@ -125,7 +130,11 @@ data class AppleVarietyStockInfo(
     val boxTypeTitle: String,
     val inBoxes: Int,
     val outBoxes: Int,
-    val remainingBoxes: Int
+    val remainingBoxes: Int,
+    val inWeightKg: Double = 0.0,
+    val outWeightKg: Double = 0.0,
+    val remainingWeightKg: Double = 0.0,
+    val hasUnweighed: Boolean = false
 )
 
 enum class TimeRangeFilter(val titleFa: String) {
@@ -194,8 +203,7 @@ fun DashboardScreen(
             val outWeight = outEntries.sumOf { it.netWeightKg }
             val remainingWeight = (inWeight - outWeight).coerceAtLeast(0.0)
 
-            val firstEntry = entries.firstOrNull()
-            val owner = firstEntry?.farmerName ?: "نامشخص"
+            val owner = entries.sortedByDescending { it.createdAt }.map { it.farmerName.trim() }.firstOrNull { it.isNotBlank() } ?: "نامشخص"
             val roomNum = code.substringBefore('.').trim()
             val partNum = if (code.contains('.')) code.substringAfter('.').trim() else ""
 
@@ -203,21 +211,30 @@ fun DashboardScreen(
             val workersPaid = entries.sumOf { it.totalWorkersPaid }
             val workersRemaining = entries.sumOf { it.totalWorkersRemaining }
 
-            // تفکیک نوع سیب و مدل سبد
+            // تفکیک نوع سیب و مدل سبد به همراه وزن هر مدل سبد
             val varietyGroups = entries.groupBy { Pair(it.displayAppleName, it.boxType.titleFa) }
             val appleBreakdown = varietyGroups.map { (pair, vEntries) ->
                 val vIn = vEntries.filter { it.operationType == RecordType.ENTRY }.sumOf { it.boxCount }
                 val vOut = vEntries.filter { it.operationType == RecordType.EXIT }.sumOf { it.boxCount }
                 val vRemaining = (vIn - vOut).coerceAtLeast(0)
+                val vInWeight = vEntries.filter { it.operationType == RecordType.ENTRY }.sumOf { it.netWeightKg }
+                val vOutWeight = vEntries.filter { it.operationType == RecordType.EXIT }.sumOf { it.netWeightKg }
+                val vRemainingWeight = (vInWeight - vOutWeight).coerceAtLeast(0.0)
+                val vHasUnweighed = vEntries.any { !it.hasWeightRecorded }
                 AppleVarietyStockInfo(
                     appleName = pair.first,
                     boxTypeTitle = pair.second,
                     inBoxes = vIn,
                     outBoxes = vOut,
-                    remainingBoxes = vRemaining
+                    remainingBoxes = vRemaining,
+                    inWeightKg = vInWeight,
+                    outWeightKg = vOutWeight,
+                    remainingWeightKg = vRemainingWeight,
+                    hasUnweighed = vHasUnweighed
                 )
             }.sortedByDescending { it.remainingBoxes }
 
+            val codeHasUnweighed = entries.any { !it.hasWeightRecorded }
             CargoCodeDetailedItem(
                 cargoCode = code,
                 ownerName = owner,
@@ -226,12 +243,15 @@ fun DashboardScreen(
                 totalInBoxes = totalIn,
                 totalOutBoxes = totalOut,
                 remainingBoxes = remaining,
+                totalInWeightKg = inWeight,
+                totalOutWeightKg = outWeight,
                 remainingNetWeightKg = remainingWeight,
                 totalHandlingFees = handlingFees,
                 totalWorkersPaid = workersPaid,
                 totalWorkersRemaining = workersRemaining,
                 appleBreakdown = appleBreakdown,
-                entries = entries.sortedByDescending { it.createdAt }
+                entries = entries.sortedByDescending { it.createdAt },
+                hasUnweighedEntries = codeHasUnweighed
             )
         }.sortedWith(compareByDescending<CargoCodeDetailedItem> { it.remainingBoxes }.thenBy { it.cargoCode })
     }
@@ -430,12 +450,23 @@ fun DashboardScreen(
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "وزن خالص تخمینی",
-                                    color = Color(0xFFD1E7DD),
-                                    fontSize = 11.sp,
-                                    fontFamily = VazirmatnFamily
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (state.hasUnweighedRecords) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = "وزن تقریبی",
+                                            tint = AppleYellow,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                    }
+                                    Text(
+                                        text = if (state.hasUnweighedRecords) "وزن تقریبی خالص" else "وزن خالص تخمینی",
+                                        color = Color(0xFFD1E7DD),
+                                        fontSize = 11.sp,
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                }
                                 Text(
                                     text = NumberFormatHelper.formatWeightKg(state.currentStockWeightKg, true),
                                     color = AppleGreenLight,
@@ -468,6 +499,32 @@ fun DashboardScreen(
                             color = AppleGreen,
                             trackColor = Color.White.copy(alpha = 0.2f),
                         )
+                        if (state.hasUnweighedRecords) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.25f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = AppleYellow,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "توجه: این وزن تقریبی است و دقیق نمی‌باشد؛ زیرا بارهایی در سردخانه وجود دارند که وزن باسکول برای آن‌ها ثبت نشده است.",
+                                    color = Color(0xFFFEF3C7),
+                                    fontSize = 10.sp,
+                                    fontFamily = VazirmatnFamily,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
@@ -813,13 +870,30 @@ private fun ExpandableCargoCodeCard(
                                 fontFamily = VazirmatnFamily
                             )
                         }
-                        Text(
-                            text = if (hasStock) "${NumberFormatHelper.formatTonnage(item.remainingNetWeightKg / 1000.0, true)} تن" else "تخلیه کامل",
-                            fontSize = 10.sp,
-                            fontWeight = if (hasStock) FontWeight.Bold else FontWeight.Normal,
-                            color = if (hasStock) EmeraldPrimary else TextMuted,
-                            fontFamily = VazirmatnFamily
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (hasStock && item.hasUnweighedEntries) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "وزن تقریبی",
+                                    tint = AppleYellow,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                            }
+                            val weightText = when {
+                                !hasStock -> "تخلیه کامل"
+                                item.remainingNetWeightKg <= 0.0 && item.hasUnweighedEntries -> "بدون باسکول"
+                                item.hasUnweighedEntries -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} (تقریبی)"
+                                else -> NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)
+                            }
+                            Text(
+                                text = weightText,
+                                fontSize = 10.sp,
+                                fontWeight = if (hasStock) FontWeight.Bold else FontWeight.Normal,
+                                color = if (hasStock) (if (item.hasUnweighedEntries) AppleYellow else EmeraldPrimary) else TextMuted,
+                                fontFamily = VazirmatnFamily
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
@@ -886,6 +960,26 @@ private fun ExpandableCargoCodeCard(
                                     color = Color(0xFF1B5E20),
                                     fontFamily = VazirmatnFamily
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                val hasUnweighedIn = item.entries.any { it.operationType == RecordType.ENTRY && !it.hasWeightRecorded }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (hasUnweighedIn) {
+                                        Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                    }
+                                    val inWeightDisplay = when {
+                                        item.totalInWeightKg <= 0.0 && hasUnweighedIn -> "بدون باسکول"
+                                        hasUnweighedIn -> "${NumberFormatHelper.formatWeightTon(item.totalInWeightKg, true)} *"
+                                        else -> NumberFormatHelper.formatWeightTon(item.totalInWeightKg, true)
+                                    }
+                                    Text(
+                                        text = inWeightDisplay,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (hasUnweighedIn && item.totalInWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFF2E7D32),
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                }
                             }
                         }
 
@@ -912,6 +1006,26 @@ private fun ExpandableCargoCodeCard(
                                     color = Color(0xFFBF360C),
                                     fontFamily = VazirmatnFamily
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                val hasUnweighedOut = item.entries.any { it.operationType == RecordType.EXIT && !it.hasWeightRecorded }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (hasUnweighedOut) {
+                                        Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                    }
+                                    val outWeightDisplay = when {
+                                        item.totalOutWeightKg <= 0.0 && hasUnweighedOut -> "بدون باسکول"
+                                        hasUnweighedOut -> "${NumberFormatHelper.formatWeightTon(item.totalOutWeightKg, true)} *"
+                                        else -> NumberFormatHelper.formatWeightTon(item.totalOutWeightKg, true)
+                                    }
+                                    Text(
+                                        text = outWeightDisplay,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (hasUnweighedOut && item.totalOutWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFFD84315),
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                }
                             }
                         }
 
@@ -938,6 +1052,26 @@ private fun ExpandableCargoCodeCard(
                                     color = Color(0xFF0C4A6E),
                                     fontFamily = VazirmatnFamily
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (item.hasUnweighedEntries) {
+                                        Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                    }
+                                    val remWeightDisplay = when {
+                                        item.remainingBoxes <= 0 -> "تخلیه کامل"
+                                        item.remainingNetWeightKg <= 0.0 && item.hasUnweighedEntries -> "بدون باسکول"
+                                        item.hasUnweighedEntries -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} *"
+                                        else -> NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)
+                                    }
+                                    Text(
+                                        text = remWeightDisplay,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (item.hasUnweighedEntries && item.remainingNetWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFF0284C7),
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                }
                             }
                         }
                     }
@@ -977,6 +1111,34 @@ private fun ExpandableCargoCodeCard(
                                     .clip(RoundedCornerShape(3.dp)),
                                 color = ExitOrange,
                                 trackColor = Color(0xFFC8E6C9)
+                            )
+                        }
+                    }
+
+                    if (item.hasUnweighedEntries) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFFEF3C7))
+                                .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "توجه: وزن‌های ستاره‌دار (*) تقریبی است؛ زیرا برای برخی از بارهای این کد، وزن باسکول ثبت نشده است و فقط وزن بارهای ثبت‌شده محاسبه گردیده است.",
+                                color = Color(0xFF92400E),
+                                fontSize = 10.sp,
+                                fontFamily = VazirmatnFamily,
+                                lineHeight = 15.sp
                             )
                         }
                     }
@@ -1081,7 +1243,7 @@ private fun ExpandableCargoCodeCard(
 
                                     Spacer(modifier = Modifier.width(8.dp))
 
-                                    // مانده با رنگ متن سیاه در کادر سفید مجزا و بدون شکستگی
+                                    // مانده با رنگ متن سیاه در کادر سفید مجزا و بدون شکستگی به همراه وزن دقیق
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(7.dp))
@@ -1089,14 +1251,30 @@ private fun ExpandableCargoCodeCard(
                                             .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(7.dp))
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
-                                        Text(
-                                            text = "مانده: ${NumberFormatHelper.formatBoxes(variety.remainingBoxes, true)}",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color.Black,
-                                            fontFamily = VazirmatnFamily,
-                                            maxLines = 1
-                                        )
+                                        val remWeightStr = when {
+                                            variety.remainingWeightKg > 0 -> " • ${NumberFormatHelper.formatWeightTon(variety.remainingWeightKg, true)}"
+                                            variety.hasUnweighed -> " • بدون باسکول"
+                                            else -> ""
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (variety.hasUnweighed) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Warning,
+                                                    contentDescription = "تقریبی",
+                                                    tint = AppleYellow,
+                                                    modifier = Modifier.size(11.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                            }
+                                            Text(
+                                                text = "مانده: ${NumberFormatHelper.formatBoxes(variety.remainingBoxes, true)}$remWeightStr",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.Black,
+                                                fontFamily = VazirmatnFamily,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
 
@@ -1127,8 +1305,13 @@ private fun ExpandableCargoCodeCard(
                                             fontFamily = VazirmatnFamily
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
+                                        val inWeightStr = when {
+                                            variety.inWeightKg > 0 -> " (${NumberFormatHelper.formatWeightTon(variety.inWeightKg, true)})"
+                                            variety.hasUnweighed -> " (بدون باسکول)"
+                                            else -> ""
+                                        }
                                         Text(
-                                            text = "${NumberFormatHelper.formatBoxes(variety.inBoxes, true)}",
+                                            text = "${NumberFormatHelper.formatBoxes(variety.inBoxes, true)}$inWeightStr",
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF16A34A),
@@ -1151,8 +1334,13 @@ private fun ExpandableCargoCodeCard(
                                             fontFamily = VazirmatnFamily
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
+                                        val outWeightStr = when {
+                                            variety.outWeightKg > 0 -> " (${NumberFormatHelper.formatWeightTon(variety.outWeightKg, true)})"
+                                            variety.hasUnweighed -> " (بدون باسکول)"
+                                            else -> ""
+                                        }
                                         Text(
-                                            text = "${NumberFormatHelper.formatBoxes(variety.outBoxes, true)}",
+                                            text = "${NumberFormatHelper.formatBoxes(variety.outBoxes, true)}$outWeightStr",
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color(0xFFDC2626),

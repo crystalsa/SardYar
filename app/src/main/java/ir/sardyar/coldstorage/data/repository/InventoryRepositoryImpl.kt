@@ -39,8 +39,10 @@ class InventoryRepositoryImpl : InventoryRepository {
         val index = current.indexOfFirst { it.id == record.id }
         if (index != -1) {
             current[index] = record
-            _entries.value = current
+        } else {
+            current.add(0, record)
         }
+        _entries.value = current
     }
 
     override suspend fun deleteRecord(id: String) {
@@ -130,10 +132,10 @@ class InventoryRepositoryImpl : InventoryRepository {
                 isGradeTwo = false,
                 boxType = BoxType.TWO_ROW,
                 boxCount = 420,
-                estimatedTonnage = 7.56,
-                grossWeightKg = 8400.0,
-                tareWeightKg = 840.0,
-                netWeightKg = 7560.0,
+                estimatedTonnage = 0.0,
+                grossWeightKg = 0.0,
+                tareWeightKg = 0.0,
+                netWeightKg = 0.0,
                 vehicleType = VehicleType.NISSAN,
                 plateNumber = "۴۳-ج-۵۱۲ ایران ۷۱",
                 driverName = "رسول پناهی",
@@ -172,10 +174,10 @@ class InventoryRepositoryImpl : InventoryRepository {
                 isGradeTwo = false,
                 boxType = BoxType.THREE_ROW,
                 boxCount = 750,
-                estimatedTonnage = 13.5,
-                grossWeightKg = 15200.0,
-                tareWeightKg = 1700.0,
-                netWeightKg = 13500.0,
+                estimatedTonnage = 0.0,
+                grossWeightKg = 0.0,
+                tareWeightKg = 0.0,
+                netWeightKg = 0.0,
                 vehicleType = VehicleType.KHAVAR,
                 plateNumber = "۲۱-ع-۸۹۰ ایران ۱۵",
                 driverName = "محسن بهرامی",
@@ -214,10 +216,10 @@ class InventoryRepositoryImpl : InventoryRepository {
                 isGradeTwo = false,
                 boxType = BoxType.SINGLE_ROW,
                 boxCount = 500,
-                estimatedTonnage = 9.0,
-                grossWeightKg = 10100.0,
-                tareWeightKg = 1100.0,
-                netWeightKg = 9000.0,
+                estimatedTonnage = 0.0,
+                grossWeightKg = 0.0,
+                tareWeightKg = 0.0,
+                netWeightKg = 0.0,
                 vehicleType = VehicleType.NISSAN,
                 plateNumber = "۵۵-ب-۳۲۱ ایران ۲۳",
                 driverName = "علی صابری",
@@ -249,10 +251,10 @@ class InventoryRepositoryImpl : InventoryRepository {
                 isGradeTwo = false,
                 boxType = BoxType.TWO_ROW,
                 boxCount = 120,
-                estimatedTonnage = 2.16,
-                grossWeightKg = 2400.0,
-                tareWeightKg = 240.0,
-                netWeightKg = 2160.0,
+                estimatedTonnage = 0.0,
+                grossWeightKg = 0.0,
+                tareWeightKg = 0.0,
+                netWeightKg = 0.0,
                 vehicleType = VehicleType.NISSAN,
                 plateNumber = "۷۸-ج-۹۸۷ ایران ۱۱",
                 driverName = "رضا کاظمی",

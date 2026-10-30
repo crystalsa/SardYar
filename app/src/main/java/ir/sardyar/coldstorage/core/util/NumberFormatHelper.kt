@@ -1,28 +1,32 @@
 package ir.sardyar.coldstorage.core.util
 
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 object NumberFormatHelper {
 
-    private val formatter = DecimalFormat("#,###")
+    private val symbols = DecimalFormatSymbols(Locale.US)
+    private val intFormatter = DecimalFormat("#,###", symbols)
+    private val decimalFormatter = DecimalFormat("#,##0.##", symbols)
 
     fun format(value: Number?, toPersian: Boolean = true): String {
         if (value == null) return if (toPersian) "۰" else "0"
-        val formatted = formatter.format(value)
+        val formatted = intFormatter.format(value)
         return if (toPersian) JalaliDateHelper.toPersianDigits(formatted) else formatted
     }
 
     fun formatWeightKg(kg: Double?, toPersian: Boolean = true): String {
-        if (kg == null) return if (toPersian) "۰ کیلوگرم" else "0 kg"
-        return "${format(kg, toPersian)} کیلوگرم"
+        if (kg == null || kg == 0.0) return if (toPersian) "۰ کیلوگرم" else "0 kg"
+        val formatted = decimalFormatter.format(kg)
+        return if (toPersian) "${JalaliDateHelper.toPersianDigits(formatted)} کیلوگرم" else "$formatted kg"
     }
 
     fun formatWeightTon(kg: Double?, toPersian: Boolean = true): String {
         if (kg == null || kg == 0.0) return if (toPersian) "۰ تن" else "0 ton"
         val tons = kg / 1000.0
-        val text = if (tons % 1.0 == 0.0) tons.toLong().toString() else String.format("%.2f", tons)
-        val withComma = formatter.format(text.toDoubleOrNull() ?: 0.0)
-        return if (toPersian) "${JalaliDateHelper.toPersianDigits(withComma)} تن" else "$withComma تن"
+        val formatted = decimalFormatter.format(tons)
+        return if (toPersian) "${JalaliDateHelper.toPersianDigits(formatted)} تن" else "$formatted ton"
     }
 
     fun formatBoxes(count: Int?, toPersian: Boolean = true): String {
@@ -37,9 +41,8 @@ object NumberFormatHelper {
 
     fun formatTonnage(tons: Double?, toPersian: Boolean = true): String {
         if (tons == null || tons == 0.0) return if (toPersian) "۰" else "0"
-        val text = if (tons % 1.0 == 0.0) tons.toLong().toString() else String.format("%.2f", tons)
-        val withComma = formatter.format(text.toDoubleOrNull() ?: 0.0)
-        return if (toPersian) JalaliDateHelper.toPersianDigits(withComma) else withComma
+        val formatted = decimalFormatter.format(tons)
+        return if (toPersian) JalaliDateHelper.toPersianDigits(formatted) else formatted
     }
 
     fun parseDouble(input: String): Double {

@@ -1,5 +1,10 @@
 package ir.sardyar.coldstorage.presentation.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -133,14 +138,14 @@ fun NewRecordScreen(
     onBack: () -> Unit
 ) {
     val todayJalali = remember { JalaliDateHelper.getTodayJalali() }
-    var selectedJalali by remember {
+    var selectedJalali by remember(editingRecord?.id) {
         mutableStateOf(
             if (editingRecord != null) {
                 JalaliDateHelper.parseShortDate(editingRecord.dateShamsi) ?: todayJalali
             } else todayJalali
         )
     }
-    var dayOffset by remember {
+    var dayOffset by remember(editingRecord?.id) {
         mutableIntStateOf(
             if (editingRecord != null) {
                 val parsed = JalaliDateHelper.parseShortDate(editingRecord.dateShamsi)
@@ -150,30 +155,30 @@ fun NewRecordScreen(
     }
     var isDatePickerOpen by remember { mutableStateOf(false) }
 
-    var selectedFacilityId by remember {
+    var selectedFacilityId by remember(editingRecord?.id) {
         mutableStateOf(editingRecord?.facilityId ?: (if (defaultFacilityId != null && defaultFacilityId != "ALL") defaultFacilityId else facilities.firstOrNull()?.id ?: "FAC-01"))
     }
-    var recordType by remember { mutableStateOf(editingRecord?.operationType ?: initialType) }
-    var isNoCode by remember {
+    var recordType by remember(editingRecord?.id) { mutableStateOf(editingRecord?.operationType ?: initialType) }
+    var isNoCode by remember(editingRecord?.id) {
         mutableStateOf(editingRecord?.cargoCode?.startsWith("بدون کد") == true || editingRecord?.cargoCode?.startsWith("بدون-کد") == true)
     }
     val knownCodeMap = remember(lotBalances) {
         lotBalances.associate { it.cargoCode.trim() to it.ownerName.trim() }
     }
-    var cargoCode by remember {
+    var cargoCode by remember(editingRecord?.id) {
         mutableStateOf(if (isNoCode) "" else (editingRecord?.cargoCode ?: ""))
     }
-    var farmerName by remember {
+    var farmerName by remember(editingRecord?.id) {
         mutableStateOf(editingRecord?.farmerName ?: "")
     }
-    var autoFilledOwnerName by remember {
+    var autoFilledOwnerName by remember(editingRecord?.id) {
         mutableStateOf(if (!isNoCode && knownCodeMap.containsKey(cargoCode.trim())) knownCodeMap[cargoCode.trim()] ?: "" else "")
     }
-    var farmerPhone by remember { mutableStateOf(editingRecord?.farmerPhone ?: "") }
-    var selectedCategory by remember { mutableStateOf(editingRecord?.appleCategory ?: AppleCategory.YELLOW) }
-    var isGradeTwo by remember { mutableStateOf(editingRecord?.isGradeTwo ?: false) }
-    var selectedBoxType by remember { mutableStateOf(editingRecord?.boxType ?: BoxType.TWO_ROW) }
-    var customAppleName by remember { mutableStateOf(editingRecord?.customAppleName ?: "") }
+    var farmerPhone by remember(editingRecord?.id) { mutableStateOf(editingRecord?.farmerPhone ?: "") }
+    var selectedCategory by remember(editingRecord?.id) { mutableStateOf(editingRecord?.appleCategory ?: AppleCategory.YELLOW) }
+    var isGradeTwo by remember(editingRecord?.id) { mutableStateOf(editingRecord?.isGradeTwo ?: false) }
+    var selectedBoxType by remember(editingRecord?.id) { mutableStateOf(editingRecord?.boxType ?: BoxType.TWO_ROW) }
+    var customAppleName by remember(editingRecord?.id) { mutableStateOf(editingRecord?.customAppleName ?: "") }
 
     // سوابق بارهای این کد جهت تفکیک دقیق موجودی هر مدل جعبه
     val currentCodeRecords = remember(cargoCode, allRecords) {
@@ -190,31 +195,34 @@ fun NewRecordScreen(
     }
 
     // شمارشگر جعبه (پیش‌فرض صفر)
-    var boxCountInt by remember { mutableIntStateOf(editingRecord?.boxCount ?: 0) }
+    var boxCountInt by remember(editingRecord?.id) { mutableIntStateOf(editingRecord?.boxCount ?: 0) }
     var isManualBoxDialogShow by remember { mutableStateOf(false) }
-    var manualBoxInput by remember { mutableStateOf(if ((editingRecord?.boxCount ?: 0) > 0) editingRecord?.boxCount.toString() else "") }
+    var manualBoxInput by remember(editingRecord?.id) { mutableStateOf(if ((editingRecord?.boxCount ?: 0) > 0) editingRecord?.boxCount.toString() else "") }
 
-    // ورودی‌های باسکول (پیش‌فرض خالی)
-    var grossWeight by remember {
+    // ورودی‌های باسکول (پیش‌فرض غیرفعال و خالی)
+    var isScaleEnabled by remember(editingRecord?.id) {
+        mutableStateOf((editingRecord?.grossWeightKg ?: 0.0) > 0.0)
+    }
+    var grossWeight by remember(editingRecord?.id) {
         mutableStateOf<String>(if ((editingRecord?.grossWeightKg ?: 0.0) > 0) editingRecord?.grossWeightKg?.toInt().toString() else "")
     }
-    var tareWeight by remember {
+    var tareWeight by remember(editingRecord?.id) {
         mutableStateOf<String>(if ((editingRecord?.tareWeightKg ?: 0.0) > 0) editingRecord?.tareWeightKg?.toString() ?: "" else "")
     }
 
     // وسیله نقلیه
-    var selectedVehicle by remember { mutableStateOf(editingRecord?.vehicleType ?: VehicleType.NISSAN) }
-    var driverName by remember { mutableStateOf(editingRecord?.driverName ?: "") }
-    var plateNumber by remember { mutableStateOf(editingRecord?.plateNumber ?: "") }
+    var selectedVehicle by remember(editingRecord?.id) { mutableStateOf(editingRecord?.vehicleType ?: VehicleType.NISSAN) }
+    var driverName by remember(editingRecord?.id) { mutableStateOf(editingRecord?.driverName ?: "") }
+    var plateNumber by remember(editingRecord?.id) { mutableStateOf(editingRecord?.plateNumber ?: "") }
 
     // محاسبه هزینه تخلیه/بارگیری (پیش‌فرض خالی / بدون پیش‌فرض عددی اشتباه)
-    var feeCalcType by remember { mutableStateOf(editingRecord?.feeCalculationType ?: FeeCalculationType.PER_BOX) }
-    var unitRateStr by remember {
+    var feeCalcType by remember(editingRecord?.id) { mutableStateOf(editingRecord?.feeCalculationType ?: FeeCalculationType.PER_BOX) }
+    var unitRateStr by remember(editingRecord?.id) {
         mutableStateOf(if ((editingRecord?.unitRate ?: 0.0) > 0) editingRecord?.unitRate?.toInt().toString() else "")
     }
 
     // لیست کارگران (پیش‌فرض صفر کارگر)
-    val workersList = remember {
+    val workersList = remember(editingRecord?.id) {
         mutableStateListOf<WorkerFormItem>().apply {
             if (editingRecord != null && editingRecord.workers.isNotEmpty()) {
                 editingRecord.workers.forEach { w ->
@@ -233,7 +241,7 @@ fun NewRecordScreen(
         }
     }
 
-    var notes by remember { mutableStateOf("") }
+    var notes by remember(editingRecord?.id) { mutableStateOf(editingRecord?.notes ?: "") }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var savedRecordSummary by remember { mutableStateOf<ColdStorageEntry?>(null) }
     var validationError by remember { mutableStateOf<String?>(null) }
@@ -1135,58 +1143,128 @@ fun NewRecordScreen(
                         QuickAddButton(text = "+۱۰۰", onClick = { boxCountInt += 100 }, modifier = Modifier.weight(1f))
                         QuickAddButton(text = "صفر", onClick = { boxCountInt = 0 }, color = Color.Red, modifier = Modifier.weight(1f))
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // ورودی باسکول و وزن خالص
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        CustomLargeField(
-                            label = "وزن ناخالص باسکول (kg)",
-                            value = grossWeight,
-                            onValueChange = { grossWeight = it },
-                            placeholder = "مثال: ۸,۴۰۰",
-                            keyboardType = KeyboardType.Number,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        CustomLargeField(
-                            label = "افت سبد ها (kg)",
-                            value = tareWeight,
-                            onValueChange = { tareWeight = it },
-                            placeholder = "مثال: ۸۴۰",
-                            keyboardType = KeyboardType.Number,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val grossValParsed = NumberFormatHelper.parseDouble(grossWeight)
-                    val tareValParsed = NumberFormatHelper.parseDouble(tareWeight)
-                    val finalNetWeight = if (grossValParsed > 0.0) (grossValParsed - tareValParsed).coerceAtLeast(0.0) else 0.0
+                    // تیک باکس فعال‌سازی وزن باسکول و افت سبد (پیش‌فرض غیرفعال)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(EmeraldPrimary.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-                            .border(1.dp, EmeraldPrimary.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isScaleEnabled) EmeraldPrimary.copy(alpha = 0.08f) else SurfaceVariant)
+                            .border(
+                                1.dp,
+                                if (isScaleEnabled) EmeraldPrimary.copy(alpha = 0.35f) else BorderColor,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable {
+                                isScaleEnabled = !isScaleEnabled
+                                if (!isScaleEnabled) {
+                                    grossWeight = ""
+                                    tareWeight = ""
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                "وزن خالص نهایی (${selectedBoxType.titleFa}):",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldPrimary,
-                                fontFamily = VazirmatnFamily
+                            Checkbox(
+                                checked = isScaleEnabled,
+                                onCheckedChange = { checked ->
+                                    isScaleEnabled = checked
+                                    if (!checked) {
+                                        grossWeight = ""
+                                        tareWeight = ""
+                                    }
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = EmeraldPrimary)
                             )
-                            Text(
-                                text = if (finalNetWeight > 0.0) NumberFormatHelper.formatWeightKg(finalNetWeight, true) else "محاسبه بر اساس باسکول",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = EmeraldPrimary,
-                                fontFamily = VazirmatnFamily
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "ثبت وزن باسکول و افت سبدها",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isScaleEnabled) EmeraldPrimary else TextPrimary,
+                                    fontFamily = VazirmatnFamily
+                                )
+                                Text(
+                                    text = if (isScaleEnabled) "تنظیمات باسکول فعال است (وارد کردن اختیاری)" else "غیرفعال (اکثراً باسکول گرفته نمی‌شود)",
+                                    fontSize = 10.sp,
+                                    color = TextMuted,
+                                    fontFamily = VazirmatnFamily
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Calculate,
+                                contentDescription = null,
+                                tint = if (isScaleEnabled) EmeraldPrimary else TextMuted,
+                                modifier = Modifier.size(20.dp)
                             )
+                        }
+                    }
+
+                    // نمایش فیلدهای باسکول و افت فقط در صورت فعال بودن تیک‌باکس
+                    AnimatedVisibility(
+                        visible = isScaleEnabled,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            // ورودی باسکول و وزن خالص
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                CustomLargeField(
+                                    label = "وزن ناخالص باسکول (kg)",
+                                    value = grossWeight,
+                                    onValueChange = { grossWeight = it },
+                                    placeholder = "مثال: ۸,۴۰۰",
+                                    keyboardType = KeyboardType.Number,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                CustomLargeField(
+                                    label = "افت سبد ها (kg)",
+                                    value = tareWeight,
+                                    onValueChange = { tareWeight = it },
+                                    placeholder = "مثال: ۸۴۰",
+                                    keyboardType = KeyboardType.Number,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val grossValParsed = NumberFormatHelper.parseDouble(grossWeight)
+                            val tareValParsed = NumberFormatHelper.parseDouble(tareWeight)
+                            val finalNetWeight = if (grossValParsed > 0.0) (grossValParsed - tareValParsed).coerceAtLeast(0.0) else 0.0
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(EmeraldPrimary.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, EmeraldPrimary.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "وزن خالص نهایی (${selectedBoxType.titleFa}):",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldPrimary,
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                    Text(
+                                        text = if (finalNetWeight > 0.0) NumberFormatHelper.formatWeightKg(finalNetWeight, true) else "ثبت نشده (بدون باسکول)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (finalNetWeight > 0.0) EmeraldPrimary else TextMuted,
+                                        fontFamily = VazirmatnFamily
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1530,8 +1608,8 @@ fun NewRecordScreen(
                         validationError = null
 
                         val finalCargoCode = if (isNoCode) "بدون کد (${farmerName.trim()})" else cargoCode.trim()
-                        val gross = NumberFormatHelper.parseDouble(grossWeight)
-                        val tare = NumberFormatHelper.parseDouble(tareWeight)
+                        val gross = if (isScaleEnabled) NumberFormatHelper.parseDouble(grossWeight) else 0.0
+                        val tare = if (isScaleEnabled) NumberFormatHelper.parseDouble(tareWeight) else 0.0
                         val net = if (gross > 0.0) (gross - tare).coerceAtLeast(0.0) else 0.0
 
                         val parsedWorkers = workersList.filter { it.name.isNotBlank() }.mapIndexed { index, w ->
@@ -1565,6 +1643,7 @@ fun NewRecordScreen(
                             grossWeightKg = gross,
                             tareWeightKg = tare,
                             netWeightKg = net,
+                            estimatedTonnage = net / 1000.0,
                             vehicleType = selectedVehicle,
                             driverName = driverName.trim(),
                             plateNumber = plateNumber.trim(),
