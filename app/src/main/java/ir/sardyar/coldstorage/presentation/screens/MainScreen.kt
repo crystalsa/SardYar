@@ -1,5 +1,6 @@
 package ir.sardyar.coldstorage.presentation.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -56,6 +57,21 @@ fun MainScreen(viewModel: InventoryViewModel) {
 
     // اگر هیچ سردخانه‌ای ثبت نشده باشد، دیالوگ ثبت اولیه به صورت خودکار باز می‌شود
     val shouldShowInitialDialog = state.facilities.isEmpty()
+
+    // مدیریت دکمه عقب گوشی: فقط در ۴ تب اصلی خارج می‌شود؛ در صفحات فرعی مثل ثبت بار برمی‌گردد
+    BackHandler(enabled = isNewRecordOpen) {
+        editingRecord = null
+        isNewRecordOpen = false
+    }
+
+    BackHandler(enabled = isFacilityManagerOpen) {
+        isFacilityManagerOpen = false
+    }
+
+    BackHandler(enabled = isAddOrEditFacilityOpen && !shouldShowInitialDialog) {
+        editingFacility = null
+        isAddOrEditFacilityOpen = false
+    }
 
     if (isFacilityManagerOpen) {
         FacilityManagementDialog(

@@ -117,6 +117,7 @@ fun DailyStatusScreen(
     val expandedCargoCodes = remember { mutableStateListOf<String>() }
     val expandedRecordIds = remember { mutableStateListOf<String>() }
     var recordToDelete by remember { mutableStateOf<ColdStorageEntry?>(null) }
+    var isSortAscending by remember { mutableStateOf(false) }
 
     // تاریخ جاری انتخاب‌شده
     val selectedJalali = JalaliDateHelper.getJalaliForOffset(dayOffset)
@@ -145,8 +146,8 @@ fun DailyStatusScreen(
         }
     }
 
-    // گروه‌بندی بارهای روز بر اساس کد بار (سطح اول آکاردئون)
-    val cargoGroups = remember(displayedRecords) {
+    // گروه‌بندی بارهای روز بر اساس کد بار (سطح اول آکاردئون) با سورت صعودی / نزولی
+    val cargoGroups = remember(displayedRecords, isSortAscending) {
         displayedRecords.groupBy {
             if (it.cargoCode.isBlank()) "NO_CODE_${it.farmerName}" else it.cargoCode
         }.map { (key, records) ->
@@ -154,6 +155,11 @@ fun DailyStatusScreen(
             val totalIn = records.filter { it.operationType == RecordType.ENTRY }.sumOf { it.boxCount }
             val totalOut = records.filter { it.operationType == RecordType.EXIT }.sumOf { it.boxCount }
             val totalCount = records.sumOf { it.boxCount }
+            val sortedRecords = if (isSortAscending) {
+                records.sortedWith(compareBy<ColdStorageEntry> { it.dateShamsi }.thenBy { it.timeStr }.thenBy { it.createdAt })
+            } else {
+                records.sortedWith(compareByDescending<ColdStorageEntry> { it.dateShamsi }.thenByDescending { it.timeStr }.thenByDescending { it.createdAt })
+            }
             DailyCargoGroup(
                 groupKey = key,
                 cargoCode = firstRecord.cargoCode,
@@ -161,9 +167,12 @@ fun DailyStatusScreen(
                 totalBoxes = totalCount,
                 inBoxes = totalIn,
                 outBoxes = totalOut,
-                records = records
+                records = sortedRecords
             )
-        }
+        }.sortedWith(
+            if (isSortAscending) compareBy { it.records.firstOrNull()?.createdAt ?: 0L }
+            else compareByDescending { it.records.firstOrNull()?.createdAt ?: 0L }
+        )
     }
 
     // آمارهای محاسباتی روز انتخاب‌شده
@@ -357,24 +366,38 @@ fun DailyStatusScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "دفترچه بارهای این تاریخ",
-                        fontSize = 15.sp,
+                        text = "دفترچه بارهای این تاریخ (${JalaliDateHelper.toPersianDigits(cargoGroups.size.toString())} کد و ${JalaliDateHelper.toPersianDigits(displayedRecords.size.toString())} بار)",
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
-                        fontFamily = VazirmatnFamily
+                        fontFamily = VazirmatnFamily,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
-                            .background(SurfaceVariant, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SurfaceVariant)
+                            .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                            .clickable { isSortAscending = !isSortAscending }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text(
-                            text = "${JalaliDateHelper.toPersianDigits(cargoGroups.size.toString())} کد • ${JalaliDateHelper.toPersianDigits(displayedRecords.size.toString())} بار",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextSecondary,
-                            fontFamily = VazirmatnFamily
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isSortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                contentDescription = "تغییر جهت مرتب‌سازی",
+                                tint = EmeraldPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isSortAscending) "صعودی" else "نزولی",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldPrimary,
+                                fontFamily = VazirmatnFamily
+                            )
+                        }
                     }
                 }
 
@@ -1034,6 +1057,9 @@ private fun DailyCargoGroupCard(
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
+                var showAllRecords by remember(group.groupKey) { mutableStateOf(false) }
+                val visibleRecords = if (showAllRecords || group.records.size <= 5) group.records else group.records.take(5)
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1043,7 +1069,7 @@ private fun DailyCargoGroupCard(
                 ) {
                     HorizontalDivider(color = BorderColor.copy(alpha = 0.6f))
 
-                    group.records.forEach { record ->
+                    visibleRecords.forEach { record ->
                         val isRecordExpanded = expandedRecordIds.contains(record.id)
                         ExpandableDailyRecordCard(
                             record = record,
@@ -1052,6 +1078,36 @@ private fun DailyCargoGroupCard(
                             onEdit = { onEditRecord(record) },
                             onDelete = { onDeleteRecord(record) }
                         )
+                    }
+
+                    if (group.records.size > 5) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Surface)
+                                .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+                                .clickable { showAllRecords = !showAllRecords }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (showAllRecords) Icons.Default.ArrowUpward else Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (showAllRecords) "نمایش کمتر (۵ فاکتور اول)" else "نمایش فاکتورهای بیشتر (${JalaliDateHelper.toPersianDigits((group.records.size - 5).toString())} فاکتور دیگر)",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldPrimary,
+                                    fontFamily = VazirmatnFamily
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1152,10 +1208,11 @@ private fun ExpandableDailyRecordCard(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "ساعت ${record.timeStr}",
-                                fontSize = 10.5.sp,
+                                text = "• ${record.dateShamsi} • ساعت ${record.timeStr}",
+                                fontSize = 10.sp,
                                 color = TextMuted,
-                                fontFamily = VazirmatnFamily
+                                fontFamily = VazirmatnFamily,
+                                maxLines = 1
                             )
                         }
                         Spacer(modifier = Modifier.height(2.dp))

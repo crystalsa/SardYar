@@ -154,6 +154,7 @@ fun NewRecordScreen(
         )
     }
     var isDatePickerOpen by remember { mutableStateOf(false) }
+    var recordTimeStr by remember(editingRecord?.id) { mutableStateOf(editingRecord?.timeStr ?: "") }
 
     var selectedFacilityId by remember(editingRecord?.id) {
         mutableStateOf(editingRecord?.facilityId ?: (if (defaultFacilityId != null && defaultFacilityId != "ALL") defaultFacilityId else facilities.firstOrNull()?.id ?: "FAC-01"))
@@ -260,14 +261,21 @@ fun NewRecordScreen(
 
     var vehicleExpanded by remember { mutableStateOf(false) }
 
-    // دیالوگ تقویم شمسی برای انتخاب سال، ماه و روز
+    // دیالوگ تقویم شمسی برای انتخاب سال، ماه و روز و ساعت اختیاری
     if (isDatePickerOpen) {
         JalaliDatePickerDialog(
             initialJalali = selectedJalali,
+            showTimePickerOption = true,
+            initialTime = recordTimeStr.ifBlank { JalaliDateHelper.getCurrentTimeStr() },
             onDateSelected = { jalali ->
                 selectedJalali = jalali
                 dayOffset = JalaliDateHelper.getOffsetForJalali(jalali.year, jalali.month, jalali.day)
                 isDatePickerOpen = false
+            },
+            onTimeSelected = { customTime ->
+                if (customTime != null) {
+                    recordTimeStr = customTime
+                }
             },
             onDismiss = { isDatePickerOpen = false }
         )
@@ -570,9 +578,10 @@ fun NewRecordScreen(
                                     )
                                 }
                                 Text(
-                                    text = "برای انتخاب از تقویم (سال، ماه یا روز) لمس کنید",
+                                    text = if (recordTimeStr.isNotBlank()) "ساعت ثبت: ${JalaliDateHelper.toPersianDigits(recordTimeStr)} (جهت تغییر تاریخ و ساعت لمس کنید)" else "برای انتخاب تاریخ و ساعت لمس کنید",
                                     fontSize = 10.sp,
-                                    color = TextMuted,
+                                    color = if (recordTimeStr.isNotBlank()) EmeraldPrimary else TextMuted,
+                                    fontWeight = if (recordTimeStr.isNotBlank()) FontWeight.Bold else FontWeight.Normal,
                                     fontFamily = VazirmatnFamily
                                 )
                             }
@@ -1634,7 +1643,7 @@ fun NewRecordScreen(
                             createdAt = editingRecord?.createdAt ?: System.currentTimeMillis(),
                             dateShamsi = JalaliDateHelper.formatShort(selectedJalali, toPersianDigits = false),
                             dateWeekday = selectedJalali.dayOfWeek,
-                            timeStr = editingRecord?.timeStr ?: "۱۲:۰۰",
+                            timeStr = recordTimeStr.ifBlank { editingRecord?.timeStr ?: JalaliDateHelper.getCurrentTimeStr() },
                             appleCategory = selectedCategory,
                             customAppleName = customAppleName.trim(),
                             isGradeTwo = isGradeTwo,

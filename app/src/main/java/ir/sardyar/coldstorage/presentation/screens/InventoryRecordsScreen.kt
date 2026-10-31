@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -100,6 +102,37 @@ fun InventoryRecordsScreen(
 ) {
     var recordToDelete by remember { mutableStateOf<ColdStorageEntry?>(null) }
     val expandedRecordIds = remember { mutableStateListOf<String>() }
+    val expandedCargoCodes = remember { mutableStateListOf<String>() }
+    var isSortAscending by remember { mutableStateOf(false) }
+
+    // گروه‌بندی رکوردهای فیلترشده بر اساس کد بار با قابلیت سورت صعودی و نزولی
+    val cargoGroups = remember(state.filteredRecords, isSortAscending) {
+        state.filteredRecords.groupBy {
+            if (it.cargoCode.isBlank()) "NO_CODE_${it.farmerName}" else it.cargoCode
+        }.map { (key, records) ->
+            val firstRecord = records.first()
+            val totalIn = records.filter { it.operationType == RecordType.ENTRY }.sumOf { it.boxCount }
+            val totalOut = records.filter { it.operationType == RecordType.EXIT }.sumOf { it.boxCount }
+            val totalCount = records.sumOf { it.boxCount }
+            val sortedRecords = if (isSortAscending) {
+                records.sortedWith(compareBy<ColdStorageEntry> { it.dateShamsi }.thenBy { it.timeStr }.thenBy { it.createdAt })
+            } else {
+                records.sortedWith(compareByDescending<ColdStorageEntry> { it.dateShamsi }.thenByDescending { it.timeStr }.thenByDescending { it.createdAt })
+            }
+            InventoryCargoGroup(
+                groupKey = key,
+                cargoCode = firstRecord.cargoCode,
+                farmerName = firstRecord.farmerName,
+                totalBoxes = totalCount,
+                inBoxes = totalIn,
+                outBoxes = totalOut,
+                records = sortedRecords
+            )
+        }.sortedWith(
+            if (isSortAscending) compareBy { it.records.firstOrNull()?.createdAt ?: 0L }
+            else compareByDescending { it.records.firstOrNull()?.createdAt ?: 0L }
+        )
+    }
 
     if (recordToDelete != null) {
         AlertDialog(
@@ -217,20 +250,51 @@ fun InventoryRecordsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // شمارش تعداد رکوردها
+            // شمارش تعداد رکوردها و دکمه سورت
             item {
-                Text(
-                    text = "تعداد رکوردهای موجود: ${JalaliDateHelper.toPersianDigits(state.filteredRecords.size.toString())}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary,
-                    fontFamily = VazirmatnFamily
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "تعداد: ${JalaliDateHelper.toPersianDigits(state.filteredRecords.size.toString())} بار (${JalaliDateHelper.toPersianDigits(cargoGroups.size.toString())} کد)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSecondary,
+                        fontFamily = VazirmatnFamily
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Surface)
+                            .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                            .clickable { isSortAscending = !isSortAscending }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isSortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                            contentDescription = "مرتب‌سازی",
+                            tint = EmeraldPrimary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isSortAscending) "قدیمی‌ترین" else "جدیدترین",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = EmeraldPrimary,
+                            fontFamily = VazirmatnFamily
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // فهرست رکوردها
-            if (state.filteredRecords.isEmpty()) {
+            // فهرست رکوردها (گروه‌بندی شده کرکره‌ای بر اساس کد بار)
+            if (cargoGroups.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -249,17 +313,22 @@ fun InventoryRecordsScreen(
                     }
                 }
             } else {
-                items(state.filteredRecords, key = { it.id }) { record ->
-                    val isExpanded = expandedRecordIds.contains(record.id)
-                    RecordItemCard(
-                        record = record,
-                        isExpanded = isExpanded,
+                items(cargoGroups, key = { it.groupKey }) { group ->
+                    val isGroupExpanded = expandedCargoCodes.contains(group.groupKey)
+                    InventoryCargoGroupCard(
+                        group = group,
+                        isExpanded = isGroupExpanded,
                         onToggleExpand = {
-                            if (isExpanded) expandedRecordIds.remove(record.id)
-                            else expandedRecordIds.add(record.id)
+                            if (isGroupExpanded) expandedCargoCodes.remove(group.groupKey)
+                            else expandedCargoCodes.add(group.groupKey)
                         },
-                        onEdit = { onEditRecord(record) },
-                        onDelete = { recordToDelete = record }
+                        expandedRecordIds = expandedRecordIds,
+                        onToggleRecordExpand = { recordId ->
+                            if (expandedRecordIds.contains(recordId)) expandedRecordIds.remove(recordId)
+                            else expandedRecordIds.add(recordId)
+                        },
+                        onEditRecord = onEditRecord,
+                        onDeleteRecord = { recordToDelete = it }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -664,6 +733,231 @@ private fun RecordItemCard(
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("حذف بار", fontSize = 12.sp, fontFamily = VazirmatnFamily)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * مدل داده‌ای گروه‌بندی بارها بر اساس کد بار در صفحه ثبت بار
+ */
+data class InventoryCargoGroup(
+    val groupKey: String,
+    val cargoCode: String,
+    val farmerName: String,
+    val totalBoxes: Int,
+    val inBoxes: Int,
+    val outBoxes: Int,
+    val records: List<ColdStorageEntry>
+)
+
+/**
+ * کارت آکاردئونی سرگروه کد بار در صفحه ثبت بار (مشابه صفحه وضعیت روز با محدودیت ۵ بار اولیه و دکمه بیشتر)
+ */
+@Composable
+private fun InventoryCargoGroupCard(
+    group: InventoryCargoGroup,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    expandedRecordIds: List<String>,
+    onToggleRecordExpand: (String) -> Unit,
+    onEditRecord: (ColdStorageEntry) -> Unit,
+    onDeleteRecord: (ColdStorageEntry) -> Unit
+) {
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        label = "groupArrowRotation"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Surface),
+        border = androidx.compose.foundation.BorderStroke(
+            if (isExpanded) 1.5.dp else 1.dp,
+            if (isExpanded) EmeraldPrimary.copy(alpha = 0.55f) else BorderColor
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isExpanded) 2.dp else 0.dp)
+    ) {
+        Column {
+            // ردیف هدر کد بار
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand)
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // سمت راست: برچسب کد و نام باغدار
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (group.cargoCode.isNotBlank()) EmeraldContainer else Color(0xFFFEF3C7),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (group.cargoCode.isNotBlank()) EmeraldPrimary.copy(alpha = 0.35f) else Color(0xFFF59E0B).copy(alpha = 0.4f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (group.cargoCode.isNotBlank()) "کد ${group.cargoCode}" else "بدون کد",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (group.cargoCode.isNotBlank()) EmeraldPrimary else Color(0xFFD97706),
+                            fontFamily = VazirmatnFamily
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = group.farmerName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp,
+                            color = TextPrimary,
+                            fontFamily = VazirmatnFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${JalaliDateHelper.toPersianDigits(group.records.size.toString())} فاکتور ثبت شده",
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            fontFamily = VazirmatnFamily
+                        )
+                    }
+                }
+
+                // سمت چپ: مجموع جعبه‌ها و فلش کرکره
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "مجموع: ",
+                                fontSize = 11.sp,
+                                color = TextMuted,
+                                fontFamily = VazirmatnFamily
+                            )
+                            Text(
+                                text = "${NumberFormatHelper.format(group.totalBoxes.toLong(), true)} جعبه",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary,
+                                fontFamily = VazirmatnFamily
+                            )
+                        }
+                        if (group.inBoxes > 0 && group.outBoxes > 0) {
+                            Text(
+                                text = "ورود: ${group.inBoxes} • خروج: ${group.outBoxes}",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = VazirmatnFamily
+                            )
+                        } else if (group.inBoxes > 0) {
+                            Text(
+                                text = "ورودی",
+                                fontSize = 10.sp,
+                                color = EntryGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = VazirmatnFamily
+                            )
+                        } else {
+                            Text(
+                                text = "خروجی",
+                                fontSize = 10.sp,
+                                color = ExitOrange,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = VazirmatnFamily
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    IconButton(
+                        onClick = onToggleExpand,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "باز کردن فاکتورهای این کد",
+                            tint = if (isExpanded) EmeraldPrimary else TextSecondary,
+                            modifier = Modifier.rotate(arrowRotation)
+                        )
+                    }
+                }
+            }
+
+            // فاکتورهای درون کرکره کد بار با محدودیت اولیه ۵ عدد و دکمه نمایش بیشتر
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                var showAllRecords by remember(group.groupKey) { mutableStateOf(false) }
+                val visibleRecords = if (showAllRecords || group.records.size <= 5) group.records else group.records.take(5)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceVariant.copy(alpha = 0.35f))
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(color = BorderColor.copy(alpha = 0.6f))
+
+                    visibleRecords.forEach { record ->
+                        val isRecordExpanded = expandedRecordIds.contains(record.id)
+                        RecordItemCard(
+                            record = record,
+                            isExpanded = isRecordExpanded,
+                            onToggleExpand = { onToggleRecordExpand(record.id) },
+                            onEdit = { onEditRecord(record) },
+                            onDelete = { onDeleteRecord(record) }
+                        )
+                    }
+
+                    if (group.records.size > 5) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Surface)
+                                .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+                                .clickable { showAllRecords = !showAllRecords }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (showAllRecords) Icons.Default.ArrowUpward else Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (showAllRecords) "نمایش کمتر (۵ فاکتور اول)" else "نمایش فاکتورهای بیشتر (${JalaliDateHelper.toPersianDigits((group.records.size - 5).toString())} فاکتور دیگر)",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldPrimary,
+                                    fontFamily = VazirmatnFamily
+                                )
+                            }
                         }
                     }
                 }

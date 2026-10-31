@@ -53,6 +53,13 @@ data class InventoryUiState(
     val hasUnweighedRecords: Boolean
         get() = records.any { !it.hasWeightRecorded }
 
+    val hasAnyWeighedRecord: Boolean
+        get() = records.any { it.hasWeightRecorded }
+
+    // فقط زمانی که حداقل یک بار باسکول‌دار و در عین حال بار بدون باسکول وجود دارد هشدار تقریبی فعال است
+    val isWeightPartiallyRecorded: Boolean
+        get() = hasAnyWeighedRecord && hasUnweighedRecords
+
     val goldenPremiumStockKg: Double
         get() = getCategoryStock(AppleCategory.GOLDEN_PREMIUM)
 

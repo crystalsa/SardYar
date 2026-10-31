@@ -193,6 +193,13 @@ object JalaliDateHelper {
         return if (toPersianDigits) toPersianDigits(text) else text
     }
 
+    fun getCurrentTimeStr(): String {
+        val cal = Calendar.getInstance()
+        val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+        val minute = cal.get(Calendar.MINUTE).toString().padStart(2, '0')
+        return "$hour:$minute"
+    }
+
     fun toPersianDigits(input: String): String {
         val en = charArrayOf('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
         val fa = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')

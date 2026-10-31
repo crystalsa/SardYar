@@ -1,5 +1,10 @@
 package ir.sardyar.coldstorage.presentation.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,15 +21,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -32,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,11 +74,28 @@ import ir.sardyar.coldstorage.core.util.JalaliDateHelper
 fun JalaliDatePickerDialog(
     initialJalali: JalaliDateHelper.Jalali = JalaliDateHelper.getTodayJalali(),
     onDateSelected: (JalaliDateHelper.Jalali) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    showTimePickerOption: Boolean = false,
+    initialTime: String = "12:00",
+    onTimeSelected: ((String?) -> Unit)? = null
 ) {
     var selectedYear by remember { mutableIntStateOf(initialJalali.year) }
     var selectedMonth by remember { mutableIntStateOf(initialJalali.month) }
     var selectedDay by remember { mutableIntStateOf(initialJalali.day) }
+
+    // وضعیت تیک‌باکس ثبت ساعت (پیش‌فرض خاموش)
+    var isTimeEnabled by remember { mutableStateOf(false) }
+
+    // مقداردهی اولیه ساعت و دقیقه
+    val timeParts = remember(initialTime) {
+        val clean = initialTime.trim()
+        val parts = clean.split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        Pair(h.coerceIn(0, 23), m.coerceIn(0, 59))
+    }
+    var selectedHour by remember { mutableIntStateOf(timeParts.first) }
+    var selectedMinute by remember { mutableIntStateOf(timeParts.second) }
 
     val daysInMonth = JalaliDateHelper.getDaysInMonth(selectedYear, selectedMonth)
     // اطمینان از اینکه روز انتخابی خارج از محدوده ماه نباشد
@@ -108,6 +139,7 @@ fun JalaliDatePickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(vertical = 4.dp)
             ) {
                 // هدر نمایش تاریخ جاری انتخاب‌شده
@@ -244,18 +276,202 @@ fun JalaliDatePickerDialog(
                         }
                     }
                 }
+
+                // بخش انتخاب ساعت (در صورت فعال بودن قابلیت در این صفحه)
+                if (showTimePickerOption) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = BorderColor.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // تیک باکس ثبت ساعت فاکتور (پیش‌فرض خاموش)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isTimeEnabled) EmeraldContainer.copy(alpha = 0.35f) else SurfaceVariant)
+                            .clickable { isTimeEnabled = !isTimeEnabled }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Checkbox(
+                                checked = isTimeEnabled,
+                                onCheckedChange = { isTimeEnabled = it },
+                                colors = CheckboxDefaults.colors(checkedColor = EmeraldPrimary)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "ثبت ساعت فاکتور",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isTimeEnabled) EmeraldPrimary else TextPrimary,
+                                    fontFamily = VazirmatnFamily
+                                )
+                                Text(
+                                    text = if (isTimeEnabled) "ساعت انتخابی: ${JalaliDateHelper.toPersianDigits(String.format("%02d:%02d", selectedHour, selectedMinute))}" else "پیش‌فرض خاموش (اختیاری)",
+                                    fontSize = 10.sp,
+                                    color = TextMuted,
+                                    fontFamily = VazirmatnFamily
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = if (isTimeEnabled) EmeraldPrimary else TextMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = isTimeEnabled,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            // کادر زیبا برای انتخاب ساعت و دقیقه
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Surface)
+                                    .border(1.dp, EmeraldPrimary.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp, horizontal = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // بخش دقیقه
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("دقیقه", fontSize = 11.sp, color = TextMuted, fontFamily = VazirmatnFamily)
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { selectedMinute = (selectedMinute + 5) % 60 },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = "+5 دقیقه", tint = EmeraldPrimary, modifier = Modifier.size(16.dp))
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .background(EmeraldContainer.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = JalaliDateHelper.toPersianDigits(String.format("%02d", selectedMinute)),
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = EmeraldPrimary,
+                                                fontFamily = VazirmatnFamily
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { selectedMinute = (selectedMinute - 5 + 60) % 60 },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Remove, contentDescription = "-5 دقیقه", tint = EmeraldPrimary, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+
+                                Text(":", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = EmeraldPrimary)
+
+                                // بخش ساعت
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("ساعت", fontSize = 11.sp, color = TextMuted, fontFamily = VazirmatnFamily)
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { selectedHour = (selectedHour + 1) % 24 },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = "+1 ساعت", tint = EmeraldPrimary, modifier = Modifier.size(16.dp))
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .background(EmeraldContainer.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = JalaliDateHelper.toPersianDigits(String.format("%02d", selectedHour)),
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = EmeraldPrimary,
+                                                fontFamily = VazirmatnFamily
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { selectedHour = (selectedHour - 1 + 24) % 24 },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Remove, contentDescription = "-1 ساعت", tint = EmeraldPrimary, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // کلیدهای سریع انتخاب زمان
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        val cal = java.util.Calendar.getInstance()
+                                        selectedHour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                                        selectedMinute = cal.get(java.util.Calendar.MINUTE)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp), tint = EmeraldPrimary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("ساعت الان", fontSize = 11.sp, color = EmeraldPrimary, fontFamily = VazirmatnFamily)
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(0, 15, 30, 45).forEach { min ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (selectedMinute == min) EmeraldPrimary else SurfaceVariant)
+                                                .clickable { selectedMinute = min }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = JalaliDateHelper.toPersianDigits(String.format(":%02d", min)),
+                                                fontSize = 10.sp,
+                                                color = if (selectedMinute == min) Color.White else TextSecondary,
+                                                fontFamily = VazirmatnFamily
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     val finalJalali = JalaliDateHelper.getJalali(selectedYear, selectedMonth, selectedDay)
+                    val timeStr = if (isTimeEnabled) String.format("%02d:%02d", selectedHour, selectedMinute) else null
+                    onTimeSelected?.invoke(timeStr)
                     onDateSelected(finalJalali)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("تایید تاریخ", fontWeight = FontWeight.Bold, fontFamily = VazirmatnFamily)
+                Text(
+                    text = if (isTimeEnabled) "تایید تاریخ و ساعت" else "تایید تاریخ",
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = VazirmatnFamily
+                )
             }
         },
         dismissButton = {

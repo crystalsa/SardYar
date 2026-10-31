@@ -119,7 +119,9 @@ data class CargoCodeDetailedItem(
     val totalWorkersRemaining: Double,
     val appleBreakdown: List<AppleVarietyStockInfo>,
     val entries: List<ColdStorageEntry>,
-    val hasUnweighedEntries: Boolean = entries.any { !it.hasWeightRecorded }
+    val hasUnweighedEntries: Boolean = entries.any { !it.hasWeightRecorded },
+    val hasAnyWeighedEntry: Boolean = entries.any { it.hasWeightRecorded },
+    val isWeightPartiallyRecorded: Boolean = hasAnyWeighedEntry && hasUnweighedEntries
 )
 
 /**
@@ -134,7 +136,9 @@ data class AppleVarietyStockInfo(
     val inWeightKg: Double = 0.0,
     val outWeightKg: Double = 0.0,
     val remainingWeightKg: Double = 0.0,
-    val hasUnweighed: Boolean = false
+    val hasUnweighed: Boolean = false,
+    val hasAnyWeighed: Boolean = false,
+    val isPartiallyRecorded: Boolean = false
 )
 
 enum class TimeRangeFilter(val titleFa: String) {
@@ -221,6 +225,7 @@ fun DashboardScreen(
                 val vOutWeight = vEntries.filter { it.operationType == RecordType.EXIT }.sumOf { it.netWeightKg }
                 val vRemainingWeight = (vInWeight - vOutWeight).coerceAtLeast(0.0)
                 val vHasUnweighed = vEntries.any { !it.hasWeightRecorded }
+                val vHasAnyWeighed = vEntries.any { it.hasWeightRecorded }
                 AppleVarietyStockInfo(
                     appleName = pair.first,
                     boxTypeTitle = pair.second,
@@ -230,11 +235,14 @@ fun DashboardScreen(
                     inWeightKg = vInWeight,
                     outWeightKg = vOutWeight,
                     remainingWeightKg = vRemainingWeight,
-                    hasUnweighed = vHasUnweighed
+                    hasUnweighed = vHasUnweighed,
+                    hasAnyWeighed = vHasAnyWeighed,
+                    isPartiallyRecorded = vHasAnyWeighed && vHasUnweighed
                 )
             }.sortedByDescending { it.remainingBoxes }
 
             val codeHasUnweighed = entries.any { !it.hasWeightRecorded }
+            val codeHasAnyWeighed = entries.any { it.hasWeightRecorded }
             CargoCodeDetailedItem(
                 cargoCode = code,
                 ownerName = owner,
@@ -251,7 +259,9 @@ fun DashboardScreen(
                 totalWorkersRemaining = workersRemaining,
                 appleBreakdown = appleBreakdown,
                 entries = entries.sortedByDescending { it.createdAt },
-                hasUnweighedEntries = codeHasUnweighed
+                hasUnweighedEntries = codeHasUnweighed,
+                hasAnyWeighedEntry = codeHasAnyWeighed,
+                isWeightPartiallyRecorded = codeHasAnyWeighed && codeHasUnweighed
             )
         }.sortedWith(compareByDescending<CargoCodeDetailedItem> { it.remainingBoxes }.thenBy { it.cargoCode })
     }
@@ -451,7 +461,7 @@ fun DashboardScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (state.hasUnweighedRecords) {
+                                    if (state.isWeightPartiallyRecorded) {
                                         Icon(
                                             imageVector = Icons.Default.Warning,
                                             contentDescription = "وزن تقریبی",
@@ -461,7 +471,7 @@ fun DashboardScreen(
                                         Spacer(modifier = Modifier.width(3.dp))
                                     }
                                     Text(
-                                        text = if (state.hasUnweighedRecords) "وزن تقریبی خالص" else "وزن خالص تخمینی",
+                                        text = if (state.isWeightPartiallyRecorded) "وزن تقریبی خالص" else "وزن خالص تخمینی",
                                         color = Color(0xFFD1E7DD),
                                         fontSize = 11.sp,
                                         fontFamily = VazirmatnFamily
@@ -499,7 +509,7 @@ fun DashboardScreen(
                             color = AppleGreen,
                             trackColor = Color.White.copy(alpha = 0.2f),
                         )
-                        if (state.hasUnweighedRecords) {
+                        if (state.isWeightPartiallyRecorded) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
                                 modifier = Modifier
@@ -871,7 +881,7 @@ private fun ExpandableCargoCodeCard(
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (hasStock && item.hasUnweighedEntries) {
+                            if (hasStock && item.isWeightPartiallyRecorded) {
                                 Icon(
                                     imageVector = Icons.Default.Warning,
                                     contentDescription = "وزن تقریبی",
@@ -882,15 +892,15 @@ private fun ExpandableCargoCodeCard(
                             }
                             val weightText = when {
                                 !hasStock -> "تخلیه کامل"
-                                item.remainingNetWeightKg <= 0.0 && item.hasUnweighedEntries -> "بدون باسکول"
-                                item.hasUnweighedEntries -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} (تقریبی)"
+                                !item.hasAnyWeighedEntry -> "بدون باسکول"
+                                item.isWeightPartiallyRecorded -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} (تقریبی)"
                                 else -> NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)
                             }
                             Text(
                                 text = weightText,
                                 fontSize = 10.sp,
                                 fontWeight = if (hasStock) FontWeight.Bold else FontWeight.Normal,
-                                color = if (hasStock) (if (item.hasUnweighedEntries) AppleYellow else EmeraldPrimary) else TextMuted,
+                                color = if (hasStock) (if (item.isWeightPartiallyRecorded) AppleYellow else (if (!item.hasAnyWeighedEntry) TextMuted else EmeraldPrimary)) else TextMuted,
                                 fontFamily = VazirmatnFamily
                             )
                         }
@@ -962,21 +972,23 @@ private fun ExpandableCargoCodeCard(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 val hasUnweighedIn = item.entries.any { it.operationType == RecordType.ENTRY && !it.hasWeightRecorded }
+                                val hasAnyWeighedIn = item.entries.any { it.operationType == RecordType.ENTRY && it.hasWeightRecorded }
+                                val isPartiallyWeighedIn = hasAnyWeighedIn && hasUnweighedIn
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (hasUnweighedIn) {
+                                    if (isPartiallyWeighedIn) {
                                         Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
                                     }
                                     val inWeightDisplay = when {
-                                        item.totalInWeightKg <= 0.0 && hasUnweighedIn -> "بدون باسکول"
-                                        hasUnweighedIn -> "${NumberFormatHelper.formatWeightTon(item.totalInWeightKg, true)} *"
+                                        !hasAnyWeighedIn -> "بدون باسکول"
+                                        isPartiallyWeighedIn -> "${NumberFormatHelper.formatWeightTon(item.totalInWeightKg, true)} *"
                                         else -> NumberFormatHelper.formatWeightTon(item.totalInWeightKg, true)
                                     }
                                     Text(
                                         text = inWeightDisplay,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (hasUnweighedIn && item.totalInWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFF2E7D32),
+                                        color = if (!hasAnyWeighedIn) TextMuted else (if (isPartiallyWeighedIn) Color(0xFFB45309) else Color(0xFF2E7D32)),
                                         fontFamily = VazirmatnFamily
                                     )
                                 }
@@ -1008,21 +1020,23 @@ private fun ExpandableCargoCodeCard(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 val hasUnweighedOut = item.entries.any { it.operationType == RecordType.EXIT && !it.hasWeightRecorded }
+                                val hasAnyWeighedOut = item.entries.any { it.operationType == RecordType.EXIT && it.hasWeightRecorded }
+                                val isPartiallyWeighedOut = hasAnyWeighedOut && hasUnweighedOut
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (hasUnweighedOut) {
+                                    if (isPartiallyWeighedOut) {
                                         Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
                                     }
                                     val outWeightDisplay = when {
-                                        item.totalOutWeightKg <= 0.0 && hasUnweighedOut -> "بدون باسکول"
-                                        hasUnweighedOut -> "${NumberFormatHelper.formatWeightTon(item.totalOutWeightKg, true)} *"
+                                        !hasAnyWeighedOut -> "بدون باسکول"
+                                        isPartiallyWeighedOut -> "${NumberFormatHelper.formatWeightTon(item.totalOutWeightKg, true)} *"
                                         else -> NumberFormatHelper.formatWeightTon(item.totalOutWeightKg, true)
                                     }
                                     Text(
                                         text = outWeightDisplay,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (hasUnweighedOut && item.totalOutWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFFD84315),
+                                        color = if (!hasAnyWeighedOut) TextMuted else (if (isPartiallyWeighedOut) Color(0xFFB45309) else Color(0xFFD84315)),
                                         fontFamily = VazirmatnFamily
                                     )
                                 }
@@ -1054,21 +1068,21 @@ private fun ExpandableCargoCodeCard(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (item.hasUnweighedEntries) {
+                                    if (item.isWeightPartiallyRecorded) {
                                         Icon(Icons.Default.Warning, contentDescription = "تقریبی", tint = AppleYellow, modifier = Modifier.size(10.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
                                     }
                                     val remWeightDisplay = when {
                                         item.remainingBoxes <= 0 -> "تخلیه کامل"
-                                        item.remainingNetWeightKg <= 0.0 && item.hasUnweighedEntries -> "بدون باسکول"
-                                        item.hasUnweighedEntries -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} *"
+                                        !item.hasAnyWeighedEntry -> "بدون باسکول"
+                                        item.isWeightPartiallyRecorded -> "${NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)} *"
                                         else -> NumberFormatHelper.formatWeightTon(item.remainingNetWeightKg, true)
                                     }
                                     Text(
                                         text = remWeightDisplay,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (item.hasUnweighedEntries && item.remainingNetWeightKg <= 0.0) Color(0xFFB45309) else Color(0xFF0284C7),
+                                        color = if (!item.hasAnyWeighedEntry) TextMuted else (if (item.isWeightPartiallyRecorded) Color(0xFFB45309) else Color(0xFF0284C7)),
                                         fontFamily = VazirmatnFamily
                                     )
                                 }
@@ -1115,7 +1129,7 @@ private fun ExpandableCargoCodeCard(
                         }
                     }
 
-                    if (item.hasUnweighedEntries) {
+                    if (item.isWeightPartiallyRecorded) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier
@@ -1252,12 +1266,13 @@ private fun ExpandableCargoCodeCard(
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         val remWeightStr = when {
+                                            variety.remainingWeightKg > 0 && variety.isPartiallyRecorded -> " • ${NumberFormatHelper.formatWeightTon(variety.remainingWeightKg, true)} (تقریبی)"
                                             variety.remainingWeightKg > 0 -> " • ${NumberFormatHelper.formatWeightTon(variety.remainingWeightKg, true)}"
-                                            variety.hasUnweighed -> " • بدون باسکول"
+                                            !variety.hasAnyWeighed -> " • بدون باسکول"
                                             else -> ""
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (variety.hasUnweighed) {
+                                            if (variety.isPartiallyRecorded) {
                                                 Icon(
                                                     imageVector = Icons.Default.Warning,
                                                     contentDescription = "تقریبی",
@@ -1307,7 +1322,7 @@ private fun ExpandableCargoCodeCard(
                                         Spacer(modifier = Modifier.width(4.dp))
                                         val inWeightStr = when {
                                             variety.inWeightKg > 0 -> " (${NumberFormatHelper.formatWeightTon(variety.inWeightKg, true)})"
-                                            variety.hasUnweighed -> " (بدون باسکول)"
+                                            !variety.hasAnyWeighed -> " (بدون باسکول)"
                                             else -> ""
                                         }
                                         Text(
@@ -1336,7 +1351,7 @@ private fun ExpandableCargoCodeCard(
                                         Spacer(modifier = Modifier.width(4.dp))
                                         val outWeightStr = when {
                                             variety.outWeightKg > 0 -> " (${NumberFormatHelper.formatWeightTon(variety.outWeightKg, true)})"
-                                            variety.hasUnweighed -> " (بدون باسکول)"
+                                            !variety.hasAnyWeighed -> " (بدون باسکول)"
                                             else -> ""
                                         }
                                         Text(
