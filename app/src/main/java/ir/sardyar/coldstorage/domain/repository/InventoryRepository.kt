@@ -18,6 +18,7 @@ interface InventoryRepository {
     suspend fun addFacility(facility: ColdStorageFacility)
     suspend fun updateFacility(facility: ColdStorageFacility)
     suspend fun deleteFacility(facilityId: String)
+    suspend fun restoreFacilities(facilities: List<ColdStorageFacility>) {}
 }
 
 

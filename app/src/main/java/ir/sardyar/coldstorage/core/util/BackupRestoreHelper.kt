@@ -5,6 +5,7 @@ import android.net.Uri
 import ir.sardyar.coldstorage.domain.model.AppleCategory
 import ir.sardyar.coldstorage.domain.model.BoxType
 import ir.sardyar.coldstorage.domain.model.ColdStorageEntry
+import ir.sardyar.coldstorage.domain.model.ColdStorageFacility
 import ir.sardyar.coldstorage.domain.model.FeeCalculationType
 import ir.sardyar.coldstorage.domain.model.RecordType
 import ir.sardyar.coldstorage.domain.model.VehicleType
@@ -19,9 +20,12 @@ import java.io.InputStreamReader
 object BackupRestoreHelper {
 
     /**
-     * تولید متن استاندارد JSON از کل دیتابیس
+     * تولید متن استاندارد JSON از کل دیتابیس (شامل رکوردها و در صورت نیاز سردخانه‌ها)
      */
-    fun generateBackupJsonString(records: List<ColdStorageEntry>): String {
+    fun generateBackupJsonString(
+        records: List<ColdStorageEntry>,
+        facilities: List<ColdStorageFacility> = emptyList()
+    ): String {
         val root = JSONObject()
         root.put("app", "SardYar")
         root.put("version", "1.0")
@@ -29,6 +33,23 @@ object BackupRestoreHelper {
         val today = JalaliDateHelper.getTodayJalali()
         root.put("backupDateShamsi", JalaliDateHelper.formatShort(today, toPersianDigits = false))
         root.put("recordCount", records.size)
+
+        if (facilities.isNotEmpty()) {
+            val facArray = JSONArray()
+            facilities.forEach { f ->
+                val fObj = JSONObject()
+                fObj.put("id", f.id)
+                fObj.put("name", f.name)
+                fObj.put("labelColorHex", f.labelColorHex)
+                fObj.put("managerName", f.managerName)
+                fObj.put("capacityBoxes", f.capacityBoxes)
+                fObj.put("phone", f.phone)
+                fObj.put("address", f.address)
+                fObj.put("createdAt", f.createdAt)
+                facArray.put(fObj)
+            }
+            root.put("facilities", facArray)
+        }
 
         val recordsArray = JSONArray()
         records.forEach { r ->
@@ -77,6 +98,63 @@ object BackupRestoreHelper {
 
         root.put("records", recordsArray)
         return root.toString(2)
+    }
+
+    /**
+     * تبدیل لیست سردخانه‌ها به JSON جهت ذخیره‌سازی محلی دائم
+     */
+    fun facilitiesToJson(facilities: List<ColdStorageFacility>): String {
+        val root = JSONObject()
+        val array = JSONArray()
+        facilities.forEach { f ->
+            val obj = JSONObject()
+            obj.put("id", f.id)
+            obj.put("name", f.name)
+            obj.put("labelColorHex", f.labelColorHex)
+            obj.put("managerName", f.managerName)
+            obj.put("capacityBoxes", f.capacityBoxes)
+            obj.put("phone", f.phone)
+            obj.put("address", f.address)
+            obj.put("createdAt", f.createdAt)
+            array.put(obj)
+        }
+        root.put("facilities", array)
+        return root.toString(2)
+    }
+
+    /**
+     * استخراج سردخانه‌ها از JSON
+     */
+    fun parseFacilitiesJson(jsonString: String): List<ColdStorageFacility> {
+        return try {
+            val trimmed = jsonString.trim()
+            if (trimmed.isEmpty()) return emptyList()
+            val array = if (trimmed.startsWith("[")) {
+                JSONArray(trimmed)
+            } else {
+                val root = JSONObject(trimmed)
+                if (root.has("facilities")) root.getJSONArray("facilities") else return emptyList()
+            }
+            val list = mutableListOf<ColdStorageFacility>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    ColdStorageFacility(
+                        id = obj.getString("id"),
+                        name = obj.getString("name"),
+                        labelColorHex = obj.optString("labelColorHex", "#10B981"),
+                        managerName = obj.optString("managerName", ""),
+                        capacityBoxes = obj.optInt("capacityBoxes", 100000),
+                        phone = obj.optString("phone", ""),
+                        address = obj.optString("address", ""),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     /**

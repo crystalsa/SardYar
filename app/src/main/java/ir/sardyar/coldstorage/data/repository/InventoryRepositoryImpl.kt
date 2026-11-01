@@ -1,5 +1,7 @@
 package ir.sardyar.coldstorage.data.repository
 
+import android.content.Context
+import ir.sardyar.coldstorage.core.util.BackupRestoreHelper
 import ir.sardyar.coldstorage.core.util.JalaliDateHelper
 import ir.sardyar.coldstorage.domain.model.AppleCategory
 import ir.sardyar.coldstorage.domain.model.BoxType
@@ -11,19 +13,136 @@ import ir.sardyar.coldstorage.domain.model.VehicleType
 import ir.sardyar.coldstorage.domain.model.WorkerEntry
 import ir.sardyar.coldstorage.domain.model.WorkerRole
 import ir.sardyar.coldstorage.domain.repository.InventoryRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import java.io.File
 
-class InventoryRepositoryImpl : InventoryRepository {
+class InventoryRepositoryImpl(
+    private val context: Context? = null,
+    private val baseDir: File? = context?.filesDir
+) : InventoryRepository {
 
     private val _entries = MutableStateFlow<List<ColdStorageEntry>>(emptyList())
     private val _facilities = MutableStateFlow<List<ColdStorageFacility>>(emptyList())
     private val _activeFacilityId = MutableStateFlow<String?>("FAC-01")
 
+    private val facilitiesFile: File?
+        get() = baseDir?.let { File(it, "sardyar_facilities.json") }
+
+    private val recordsFile: File?
+        get() = baseDir?.let { File(it, "sardyar_records.json") }
+
+    private val prefsFile: File?
+        get() = baseDir?.let { File(it, "sardyar_prefs.json") }
+
+    private val fileLock = Any()
+
     init {
-        seedInitialFacilities()
-        seedInitialData()
+        loadFromDiskOrSeed()
+    }
+
+    private fun loadFromDiskOrSeed() {
+        val facFile = facilitiesFile
+        val recFile = recordsFile
+        val prfFile = prefsFile
+
+        // ۱. بارگذاری یا ایجاد اولیه سردخانه‌ها
+        if (facFile != null && facFile.exists()) {
+            try {
+                val content = facFile.readText(Charsets.UTF_8).trim()
+                val parsed = BackupRestoreHelper.parseFacilitiesJson(content)
+                if (parsed.isNotEmpty()) {
+                    _facilities.value = parsed
+                } else {
+                    _facilities.value = getInitialFacilities()
+                    saveFacilitiesSync()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _facilities.value = getInitialFacilities()
+                saveFacilitiesSync()
+            }
+        } else {
+            _facilities.value = getInitialFacilities()
+            saveFacilitiesSync()
+        }
+
+        // ۲. بارگذاری یا ایجاد اولیه رکوردها
+        if (recFile != null && recFile.exists()) {
+            try {
+                val content = recFile.readText(Charsets.UTF_8).trim()
+                val parsed = BackupRestoreHelper.parseBackupJson(content)
+                _entries.value = parsed ?: emptyList()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _entries.value = getInitialData()
+                saveRecordsSync()
+            }
+        } else {
+            _entries.value = getInitialData()
+            saveRecordsSync()
+        }
+
+        // ۳. بارگذاری شناسه سردخانه فعال
+        if (prfFile != null && prfFile.exists()) {
+            try {
+                val savedId = prfFile.readText(Charsets.UTF_8).trim()
+                if (savedId == "ALL" || _facilities.value.any { it.id == savedId }) {
+                    _activeFacilityId.value = savedId
+                } else {
+                    _activeFacilityId.value = _facilities.value.firstOrNull()?.id ?: "FAC-01"
+                    saveActiveFacilitySync()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _activeFacilityId.value = _facilities.value.firstOrNull()?.id ?: "FAC-01"
+            }
+        } else {
+            _activeFacilityId.value = _facilities.value.firstOrNull()?.id ?: "FAC-01"
+            saveActiveFacilitySync()
+        }
+    }
+
+    private fun writeAtomic(targetFile: File, content: String) {
+        synchronized(fileLock) {
+            try {
+                val parent = targetFile.parentFile
+                if (parent != null && !parent.exists()) {
+                    parent.mkdirs()
+                }
+                val tempFile = File(parent, "${targetFile.name}.tmp")
+                tempFile.writeText(content, Charsets.UTF_8)
+                if (tempFile.exists()) {
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+                    tempFile.renameTo(targetFile)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun saveFacilitiesSync() {
+        facilitiesFile?.let { file ->
+            writeAtomic(file, BackupRestoreHelper.facilitiesToJson(_facilities.value))
+        }
+    }
+
+    private fun saveRecordsSync() {
+        recordsFile?.let { file ->
+            writeAtomic(file, BackupRestoreHelper.generateBackupJsonString(_entries.value, _facilities.value))
+        }
+    }
+
+    private fun saveActiveFacilitySync() {
+        prefsFile?.let { file ->
+            writeAtomic(file, _activeFacilityId.value ?: "")
+        }
     }
 
     override fun getRecords(): Flow<List<ColdStorageEntry>> = _entries.asStateFlow()
@@ -32,6 +151,9 @@ class InventoryRepositoryImpl : InventoryRepository {
         val current = _entries.value.toMutableList()
         current.add(0, record)
         _entries.value = current
+        withContext(Dispatchers.IO) {
+            saveRecordsSync()
+        }
     }
 
     override suspend fun updateRecord(record: ColdStorageEntry) {
@@ -43,16 +165,25 @@ class InventoryRepositoryImpl : InventoryRepository {
             current.add(0, record)
         }
         _entries.value = current
+        withContext(Dispatchers.IO) {
+            saveRecordsSync()
+        }
     }
 
     override suspend fun deleteRecord(id: String) {
         val current = _entries.value.toMutableList()
         current.removeAll { it.id == id }
         _entries.value = current
+        withContext(Dispatchers.IO) {
+            saveRecordsSync()
+        }
     }
 
     override suspend fun restoreRecords(records: List<ColdStorageEntry>) {
         _entries.value = records
+        withContext(Dispatchers.IO) {
+            saveRecordsSync()
+        }
     }
 
     override fun getFacilities(): Flow<List<ColdStorageFacility>> = _facilities.asStateFlow()
@@ -61,6 +192,9 @@ class InventoryRepositoryImpl : InventoryRepository {
 
     override suspend fun setActiveFacility(facilityId: String?) {
         _activeFacilityId.value = facilityId
+        withContext(Dispatchers.IO) {
+            saveActiveFacilitySync()
+        }
     }
 
     override suspend fun addFacility(facility: ColdStorageFacility) {
@@ -70,6 +204,10 @@ class InventoryRepositoryImpl : InventoryRepository {
         if (_activeFacilityId.value == null) {
             _activeFacilityId.value = facility.id
         }
+        withContext(Dispatchers.IO) {
+            saveFacilitiesSync()
+            saveActiveFacilitySync()
+        }
     }
 
     override suspend fun updateFacility(facility: ColdStorageFacility) {
@@ -78,6 +216,9 @@ class InventoryRepositoryImpl : InventoryRepository {
         if (index != -1) {
             current[index] = facility
             _facilities.value = current
+            withContext(Dispatchers.IO) {
+                saveFacilitiesSync()
+            }
         }
     }
 
@@ -85,13 +226,35 @@ class InventoryRepositoryImpl : InventoryRepository {
         val current = _facilities.value.toMutableList()
         current.removeAll { it.id == facilityId }
         _facilities.value = current
+
+        // پاک کردن رکوردهای متعلق به سردخانه حذف شده
+        val currentEntries = _entries.value.toMutableList()
+        val entriesChanged = currentEntries.removeAll { it.facilityId == facilityId }
+        if (entriesChanged) {
+            _entries.value = currentEntries
+        }
+
         if (_activeFacilityId.value == facilityId) {
             _activeFacilityId.value = current.firstOrNull()?.id
         }
+        withContext(Dispatchers.IO) {
+            saveFacilitiesSync()
+            if (entriesChanged) {
+                saveRecordsSync()
+            }
+            saveActiveFacilitySync()
+        }
     }
 
-    private fun seedInitialFacilities() {
-        _facilities.value = listOf(
+    override suspend fun restoreFacilities(facilities: List<ColdStorageFacility>) {
+        _facilities.value = facilities
+        withContext(Dispatchers.IO) {
+            saveFacilitiesSync()
+        }
+    }
+
+    private fun getInitialFacilities(): List<ColdStorageFacility> {
+        return listOf(
             ColdStorageFacility(
                 id = "FAC-01",
                 name = "سردخانه مرکزی بهارستان",
@@ -111,12 +274,12 @@ class InventoryRepositoryImpl : InventoryRepository {
         )
     }
 
-    private fun seedInitialData() {
+    private fun getInitialData(): List<ColdStorageEntry> {
         val today = JalaliDateHelper.getTodayJalali()
         val todayShamsi = JalaliDateHelper.formatShort(today, toPersianDigits = false)
         val todayDay = today.dayOfWeek
 
-        val initial = listOf(
+        return listOf(
             ColdStorageEntry(
                 id = "CS-201",
                 cargoCode = "3.8",
@@ -272,6 +435,5 @@ class InventoryRepositoryImpl : InventoryRepository {
                 notes = "خروج ۱۲۰ جعبه از کد ۳.۸ جهت سورتینگ (مانده موجودی کد ۳.۸: ۳۰۰ جعبه)"
             )
         )
-        _entries.value = initial
     }
 }
