@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.sardyar.coldstorage.domain.model.ColdStorageFacility
 import ir.sardyar.coldstorage.core.theme.AppleGreenLight
 import ir.sardyar.coldstorage.core.theme.BorderColor
 import ir.sardyar.coldstorage.core.theme.ColdIce
@@ -105,6 +106,7 @@ enum class ReportDateRange(val titleFa: String) {
 fun ReportsScreen(
     state: InventoryUiState,
     onRestoreRecords: (List<ColdStorageEntry>) -> Unit = {},
+    onRestoreBackup: (List<ColdStorageEntry>, List<ColdStorageFacility>) -> Unit = { records, _ -> onRestoreRecords(records) },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -113,7 +115,8 @@ fun ReportsScreen(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
         if (uri != null) {
-            val success = BackupRestoreHelper.writeBackupToUri(context, uri, state.records)
+            val recordsToBackup = state.allRecords.ifEmpty { state.records }
+            val success = BackupRestoreHelper.writeBackupToUri(context, uri, recordsToBackup, state.facilities)
             if (success) {
                 Toast.makeText(context, "فایل پشتیبان با موفقیت در مسیر انتخاب‌شده ذخیره شد.", Toast.LENGTH_LONG).show()
             } else {
@@ -129,8 +132,9 @@ fun ReportsScreen(
             val text = BackupRestoreHelper.readTextFromUri(context, uri)
             if (text != null) {
                 val list = BackupRestoreHelper.parseBackupJson(text)
+                val facilities = BackupRestoreHelper.parseFacilitiesJson(text)
                 if (list != null && list.isNotEmpty()) {
-                    onRestoreRecords(list)
+                    onRestoreBackup(list, facilities)
                     Toast.makeText(context, "${JalaliDateHelper.toPersianDigits(list.size.toString())} رکورد با موفقیت بازیابی و بارگذاری شد.", Toast.LENGTH_LONG).show()
                 } else {
                     Toast.makeText(context, "فایل پشتیبان انتخاب‌شده نامعتبر یا خالی است.", Toast.LENGTH_SHORT).show()

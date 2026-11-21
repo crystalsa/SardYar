@@ -264,6 +264,9 @@ fun MainScreen(viewModel: InventoryViewModel) {
                             onRestoreRecords = { records ->
                                 viewModel.restoreRecords(records)
                             },
+                            onRestoreBackup = { records, facilities ->
+                                viewModel.restoreBackup(records, facilities)
+                            },
                             modifier = Modifier.padding(padding)
                         )
                     }

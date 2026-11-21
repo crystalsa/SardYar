@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 
 data class InventoryUiState(
     val records: List<ColdStorageEntry> = emptyList(),
+    val allRecords: List<ColdStorageEntry> = emptyList(),
     val filteredRecords: List<ColdStorageEntry> = emptyList(),
     val facilities: List<ColdStorageFacility> = emptyList(),
     val activeFacilityId: String? = "FAC-01",
@@ -166,6 +167,7 @@ class InventoryViewModel(
 
         InventoryUiState(
             records = facilityRecords,
+            allRecords = allRecords,
             filteredRecords = filtered,
             facilities = facilities,
             activeFacilityId = activeFacId,
@@ -247,6 +249,15 @@ class InventoryViewModel(
 
     fun restoreRecords(records: List<ColdStorageEntry>) {
         viewModelScope.launch {
+            repository.restoreRecords(records)
+        }
+    }
+
+    fun restoreBackup(records: List<ColdStorageEntry>, facilities: List<ColdStorageFacility>? = null) {
+        viewModelScope.launch {
+            if (!facilities.isNullOrEmpty()) {
+                repository.restoreFacilities(facilities)
+            }
             repository.restoreRecords(records)
         }
     }

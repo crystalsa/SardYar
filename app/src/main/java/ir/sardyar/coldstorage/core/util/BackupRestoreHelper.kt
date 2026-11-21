@@ -170,9 +170,14 @@ object BackupRestoreHelper {
     /**
      * نوشتن مستقیم پشتیبان در Uri انتخاب‌شده توسط کاربر (Storage Access Framework)
      */
-    fun writeBackupToUri(context: Context, uri: Uri, records: List<ColdStorageEntry>): Boolean {
+    fun writeBackupToUri(
+        context: Context,
+        uri: Uri,
+        records: List<ColdStorageEntry>,
+        facilities: List<ColdStorageFacility> = emptyList()
+    ): Boolean {
         return try {
-            val jsonString = generateBackupJsonString(records)
+            val jsonString = generateBackupJsonString(records, facilities)
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 stream.write(jsonString.toByteArray(Charsets.UTF_8))
                 stream.flush()
@@ -187,8 +192,12 @@ object BackupRestoreHelper {
     /**
      * پشتیبان‌گیری از کل دیتابیس به صورت یک فایل موقت استاندارد JSON (جهت اشتراک‌گذاری)
      */
-    fun exportBackupJson(context: Context, records: List<ColdStorageEntry>): File {
-        val jsonString = generateBackupJsonString(records)
+    fun exportBackupJson(
+        context: Context,
+        records: List<ColdStorageEntry>,
+        facilities: List<ColdStorageFacility> = emptyList()
+    ): File {
+        val jsonString = generateBackupJsonString(records, facilities)
         val today = JalaliDateHelper.getTodayJalali()
         val fileName = "sardyar_backup_${today.year}_${today.month}_${today.day}_${System.currentTimeMillis().toString().takeLast(4)}.json"
         val file = File(context.cacheDir, fileName)
